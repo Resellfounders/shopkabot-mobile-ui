@@ -59,7 +59,9 @@ export async function setupWhatsAppBusinessAccount({
   );
 
   if (!response.ok) {
-    throw new Error(`Business account sync failed with status ${response.status}`);
+    throw new Error(
+      `Business account sync failed with status ${response.status}`,
+    );
   }
 
   return response.json() as Promise<SetupBusinessAccountResponse>;
@@ -86,9 +88,10 @@ export async function getWhatsAppUserSettings({
   );
 
   if (!response.ok) {
-    throw new Error(`Unable to load business settings. Status ${response.status}.`);
+    throw new Error(
+      `Unable to load business settings. Status ${response.status}.`,
+    );
   }
 
   return response.json() as Promise<UserSettingsResponse>;
 }
-
