@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "ShopKaBot",
+    "slug": "shopkabot-mobile-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "shopkabotmobile",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#07110D"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.shopkabot.mobile"
+    },
+    "android": {
+      "package": "com.shopkabot.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#07110D"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-font"
+    ]
+  }
+}
