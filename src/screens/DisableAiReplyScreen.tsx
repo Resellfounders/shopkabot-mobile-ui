@@ -3,6 +3,7 @@ import { useNavigation } from "@react-navigation/native";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -19,18 +20,56 @@ import {
   addDisabledNumber,
   getBusinessReplyConfig,
   removeDisabledNumber,
+  updateBusinessReplyConfig,
 } from "../services/api";
-import { BusinessReplyConfig } from "../types/autoReply";
+import { BusinessReplyConfig, OutputLanguage } from "../types/autoReply";
 import { palette, typography } from "../theme/palette";
 
 function normalizePhone(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function showMessage(title: string, message: string) {
+  if (Platform.OS === "web") {
+    globalThis.alert?.(`${title}\n\n${message}`);
+    return;
+  }
+
+  Alert.alert(title, message);
+}
+
+const outputLanguageOptions: Array<{
+  value: OutputLanguage;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "same_as_user",
+    label: "Same As Customer",
+    description: "Mirror the tone and language of the incoming message.",
+  },
+  {
+    value: "english",
+    label: "English",
+    description: "Keep contextual replies in English.",
+  },
+  {
+    value: "hindi",
+    label: "Hindi",
+    description: "Use simple Hindi in English script.",
+  },
+  {
+    value: "hinglish",
+    label: "Hinglish",
+    description: "Use a natural Indian WhatsApp style.",
+  },
+];
+
 export function DisableAiReplyScreen() {
   const navigation = useNavigation<any>();
   const { settings } = useAppSettings();
-  const { hasActiveSubscription, loadingSubscription } = useCurrentSubscription();
+  const { hasActiveSubscription, loadingSubscription } =
+    useCurrentSubscription();
   const businessId = settings.businessId.trim();
 
   const [config, setConfig] = useState<BusinessReplyConfig | null>(null);
@@ -38,11 +77,17 @@ export function DisableAiReplyScreen() {
   const [search, setSearch] = useState("");
   const [pageLoading, setPageLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [removingPhone, setRemovingPhone] = useState<string | null>(null);
+  const [contextualReplyEnabled, setContextualReplyEnabled] = useState(true);
+  const [outputLanguage, setOutputLanguage] =
+    useState<OutputLanguage>("same_as_user");
 
   const loadConfig = async () => {
     if (!businessId) {
       setConfig(null);
+      setContextualReplyEnabled(true);
+      setOutputLanguage("same_as_user");
       setPageLoading(false);
       return;
     }
@@ -54,12 +99,14 @@ export function DisableAiReplyScreen() {
         businessId,
       });
       setConfig(nextConfig);
+      setContextualReplyEnabled(nextConfig.contextualReplyEnabled);
+      setOutputLanguage(nextConfig.outputLanguage);
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Unable to load disabled AI reply numbers.";
-      Alert.alert("Load failed", message);
+          : "Unable to load smart reply settings.";
+      showMessage("Load failed", message);
     } finally {
       setPageLoading(false);
     }
@@ -78,18 +125,44 @@ export function DisableAiReplyScreen() {
     return source.filter((item) => item.includes(query));
   }, [config, search]);
 
+  const handleSaveSettings = async () => {
+    if (!businessId) {
+      navigation.navigate("Connect WhatsApp");
+      return;
+    }
+
+    try {
+      setSavingSettings(true);
+      await updateBusinessReplyConfig({
+        baseUrl: settings.apiBaseUrl,
+        businessId,
+        payload: {
+          contextualReplyEnabled,
+          outputLanguage,
+        },
+      });
+      await loadConfig();
+      showMessage("Saved", "Smart reply settings updated.");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to save smart reply settings.";
+      showMessage("Save failed", message);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const handleAdd = async () => {
     const normalizedPhone = normalizePhone(phone);
     if (!businessId) {
-      Alert.alert(
-        "Business required",
-        "Connect WhatsApp Business first.",
-      );
+      navigation.navigate("Connect WhatsApp");
       return;
     }
 
     if (!normalizedPhone) {
-      Alert.alert("Enter a number", "Add the customer number first.");
+      showMessage("Enter a number", "Add the customer number first.");
       return;
     }
 
@@ -102,13 +175,13 @@ export function DisableAiReplyScreen() {
       });
       setPhone("");
       await loadConfig();
-      Alert.alert("Saved", "AI replies are disabled for this number.");
+      showMessage("Saved", "AI replies are disabled for this number.");
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "Unable to disable AI replies for this number.";
-      Alert.alert("Save failed", message);
+      showMessage("Save failed", message);
     } finally {
       setSubmitting(false);
     }
@@ -132,7 +205,7 @@ export function DisableAiReplyScreen() {
         error instanceof Error
           ? error.message
           : "Unable to remove this number.";
-      Alert.alert("Remove failed", message);
+      showMessage("Remove failed", message);
     } finally {
       setRemovingPhone(null);
     }
@@ -140,10 +213,7 @@ export function DisableAiReplyScreen() {
 
   if (loadingSubscription) {
     return (
-      <PageScaffold
-        title="Disable AI Reply"
-        subtitle="Checking your plan."
-      >
+      <PageScaffold title="Smart Reply Settings" subtitle="Checking your plan.">
         <SectionCard title="Loading">
           <View style={styles.lockedState}>
             <ActivityIndicator size="small" color={palette.primaryGreen} />
@@ -157,17 +227,22 @@ export function DisableAiReplyScreen() {
   if (!hasActiveSubscription) {
     return (
       <PageScaffold
-        title="Disable AI Reply"
-        subtitle="Manual controls unlock after plan activation."
+        title="Smart Reply Settings"
+        subtitle="Bot controls unlock after plan activation."
       >
         <SectionCard title="Subscription Required">
           <View style={styles.lockedState}>
             <View style={styles.lockedIconWrap}>
-              <Ionicons name="lock-closed-outline" size={24} color={palette.warning} />
+              <Ionicons
+                name="lock-closed-outline"
+                size={24}
+                color={palette.warning}
+              />
             </View>
             <Text style={styles.lockedTitle}>Plan activation needed</Text>
             <Text style={styles.lockedCopy}>
-              Activate a plan first to manage numbers that should skip AI replies.
+              Activate a plan first to manage contextual replies and manual
+              handoff numbers.
             </Text>
             <Pressable
               style={styles.lockedButton}
@@ -183,15 +258,133 @@ export function DisableAiReplyScreen() {
 
   return (
     <PageScaffold
-      title="Disable AI Reply"
-      subtitle="Choose chats your team should handle manually."
+      title="Smart Reply Settings"
+      subtitle="Control how your bot replies and when to handoff to a human."
     >
-      <SectionCard title="Add Number">
+      <SectionCard title="Contextual Reply">
         <View style={styles.scopeRow}>
           <View style={styles.scopePill}>
             <Text style={styles.scopeLabel}>Business</Text>
-            <Text style={styles.scopeValue}>{businessId || "Not connected"}</Text>
+            <Text style={styles.scopeValue}>
+              {businessId || "Not connected"}
+            </Text>
           </View>
+          <View style={styles.scopePill}>
+            <Text style={styles.scopeLabel}>Mode</Text>
+            <Text style={styles.scopeValue}>
+              {contextualReplyEnabled ? "Contextual on" : "Direct reply"}
+            </Text>
+          </View>
+        </View>
+
+        {!businessId ? (
+          <View style={styles.noticeCard}>
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color={palette.warning}
+            />
+            <Text style={styles.noticeText}>
+              Connect WhatsApp Business first. These settings are saved per
+              business number.
+            </Text>
+          </View>
+        ) : null}
+
+        <Pressable
+          onPress={() => setContextualReplyEnabled((current) => !current)}
+          style={[
+            styles.toggleCard,
+            contextualReplyEnabled && styles.toggleCardActive,
+          ]}
+        >
+          <View style={styles.toggleCopy}>
+            <Text style={styles.toggleTitle}>
+              Enable AI contextual reply after matching
+            </Text>
+            <Text style={styles.toggleText}>
+              When this is off, the bot sends the saved approved reply directly.
+              When it is on, the backend makes the reply more natural while
+              still staying inside the approved rule context.
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.toggleBadge,
+              contextualReplyEnabled && styles.toggleBadgeActive,
+            ]}
+          >
+            <Ionicons
+              name={contextualReplyEnabled ? "checkmark" : "remove"}
+              size={18}
+              color={
+                contextualReplyEnabled
+                  ? palette.textDark
+                  : "rgba(255,255,255,0.72)"
+              }
+            />
+          </View>
+        </Pressable>
+
+        <View style={styles.languageGrid}>
+          {outputLanguageOptions.map((option) => {
+            const active = outputLanguage === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.languageCard,
+                  active && styles.languageCardActive,
+                ]}
+                onPress={() => setOutputLanguage(option.value)}
+              >
+                <Text
+                  style={[
+                    styles.languageTitle,
+                    active && styles.languageTitleActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+                <Text style={styles.languageDescription}>
+                  {option.description}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Pressable
+          onPress={() => {
+            if (!businessId) {
+              navigation.navigate("Connect WhatsApp");
+              return;
+            }
+            void handleSaveSettings();
+          }}
+          style={[
+            styles.primaryButton,
+            (!businessId || savingSettings) && styles.primaryButtonDisabled,
+          ]}
+          disabled={savingSettings}
+        >
+          <Ionicons
+            name={businessId ? "save-outline" : "business-outline"}
+            size={18}
+            color={palette.textDark}
+          />
+          <Text style={styles.primaryButtonText}>
+            {!businessId
+              ? "Connect Business To Save"
+              : savingSettings
+                ? "Saving..."
+                : "Save Smart Reply Settings"}
+          </Text>
+        </Pressable>
+      </SectionCard>
+
+      <SectionCard title="Disable AI Reply For Specific Numbers">
+        <View style={styles.scopeRow}>
           <View style={styles.scopePill}>
             <Text style={styles.scopeLabel}>Disabled</Text>
             <Text style={styles.scopeValue}>
@@ -217,7 +410,11 @@ export function DisableAiReplyScreen() {
           ]}
           disabled={submitting || !phone.trim()}
         >
-          <Ionicons name="add-circle-outline" size={18} color={palette.textDark} />
+          <Ionicons
+            name="add-circle-outline"
+            size={18}
+            color={palette.textDark}
+          />
           <Text style={styles.primaryButtonText}>
             {submitting ? "Saving..." : "Disable AI Reply"}
           </Text>
@@ -368,6 +565,92 @@ const styles = StyleSheet.create({
     color: palette.textWhite,
     fontFamily: typography.bold,
     fontSize: 14,
+  },
+  toggleCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: palette.borderDark,
+    backgroundColor: palette.cardBackgroundAlt,
+    padding: 14,
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "center",
+  },
+  toggleCardActive: {
+    borderColor: "rgba(37,211,102,0.28)",
+    backgroundColor: "rgba(37,211,102,0.08)",
+  },
+  toggleCopy: {
+    flex: 1,
+    gap: 5,
+  },
+  toggleTitle: {
+    color: palette.textWhite,
+    fontFamily: typography.bold,
+    fontSize: 15,
+  },
+  toggleText: {
+    color: "rgba(255,255,255,0.7)",
+    fontFamily: typography.medium,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  toggleBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  toggleBadgeActive: {
+    backgroundColor: palette.primaryGreen,
+  },
+  noticeCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.24)",
+    backgroundColor: "rgba(245,158,11,0.08)",
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  noticeText: {
+    flex: 1,
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: typography.medium,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  languageGrid: {
+    gap: 10,
+  },
+  languageCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: palette.borderDark,
+    backgroundColor: palette.cardBackgroundAlt,
+    padding: 12,
+    gap: 4,
+  },
+  languageCardActive: {
+    borderColor: "rgba(37,211,102,0.28)",
+    backgroundColor: "rgba(37,211,102,0.1)",
+  },
+  languageTitle: {
+    color: palette.textWhite,
+    fontFamily: typography.bold,
+    fontSize: 14,
+  },
+  languageTitleActive: {
+    color: palette.primaryGreen,
+  },
+  languageDescription: {
+    color: "rgba(255,255,255,0.66)",
+    fontFamily: typography.medium,
+    fontSize: 13,
+    lineHeight: 18,
   },
   primaryButton: {
     minHeight: 50,

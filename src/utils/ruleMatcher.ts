@@ -14,6 +14,10 @@ export function matchRuleToMessage(
     const normalizedRule = (rule.rule || "").toLowerCase();
 
     const hasMatch = phrases.some((phrase) => {
+      if (normalizedRule.includes("smart") && normalizedRule.includes("intent")) {
+        return false;
+      }
+
       if (normalizedRule.includes("exact")) {
         return normalizedMessage === phrase;
       }

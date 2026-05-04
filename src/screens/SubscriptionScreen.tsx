@@ -1,4 +1,4 @@
-import { useNavigation } from "@react-navigation/native";
+﻿import { useNavigation } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -61,9 +61,9 @@ const plans: PlanCard[] = [
     description: "Best for getting started.",
     highlight: false,
     bullets: [
-      "1 month billing",
-      "Total: Rs. 999",
-      "Great for a first setup",
+      "🗓️ 1 month billing",
+      "💳 Total: Rs. 999",
+      "🚀 Great for a first setup",
     ],
     planId: process.env.EXPO_PUBLIC_RAZORPAY_PLAN_MONTHLY_ID,
     totalCount: 1,
@@ -77,9 +77,9 @@ const plans: PlanCard[] = [
     description: "Saves Rs. 600 compared to monthly billing.",
     highlight: true,
     bullets: [
-      "6 month billing",
-      "Total: Rs. 5,394",
-      "Better value for growing teams",
+      "🗓️ 6 month billing",
+      "💳 Total: Rs. 5,394",
+      "📈 Better value for growing teams",
     ],
     planId: process.env.EXPO_PUBLIC_RAZORPAY_PLAN_6_MONTHS_ID,
     totalCount: 1,
@@ -93,9 +93,9 @@ const plans: PlanCard[] = [
     description: "Saves Rs. 2,400 compared to monthly billing.",
     highlight: false,
     bullets: [
-      "12 month billing",
-      "Total: Rs. 9,588",
-      "Lowest long-term price",
+      "🗓️ 12 month billing",
+      "💳 Total: Rs. 9,588",
+      "🏆 Lowest long-term price",
     ],
     planId: process.env.EXPO_PUBLIC_RAZORPAY_PLAN_12_MONTHS_ID,
     totalCount: 1,
@@ -109,9 +109,10 @@ const plans: PlanCard[] = [
     description: "For advanced workflows and custom integrations.",
     highlight: false,
     bullets: [
-      "Custom onboarding and strategy support",
-      "Advanced agentic AI flows and business logic",
-      "CRM, Shopify, API, and internal tool integrations",
+      "💬 Supports up to 100 customer conversations per day",
+      "🏢 Need more than 100 conversations per day? Please connect with Enterprise",
+      "🧠 Advanced agentic AI flows and business logic",
+      "🔌 CRM, Shopify, API, and internal tool integrations",
     ],
     contactUrl:
       process.env.EXPO_PUBLIC_CONTACT_BOOKING_URL ||
@@ -331,7 +332,12 @@ export function SubscriptionScreen() {
     }
   };
 
-  const subscriptionPlans = plans.filter((plan) => !plan.contactUrl);
+  const enterprisePlan = plans.find(
+    (plan) => plan.name === "Enterprise / Agentic AI",
+  );
+  const subscriptionPlans = plans.filter(
+    (plan) => plan.name !== "Enterprise / Agentic AI",
+  );
 
   return (
     <PageScaffold
@@ -505,7 +511,7 @@ export function SubscriptionScreen() {
 
                 {plan.bullets.map((bullet) => (
                   <Text key={bullet} style={styles.planBullet}>
-                    � {bullet}
+                    {bullet}
                   </Text>
                 ))}
 
@@ -535,6 +541,44 @@ export function SubscriptionScreen() {
             );
           })}
         </View>
+
+        {enterprisePlan ? (
+          <LinearGradient
+            colors={["rgba(0,194,168,0.14)", "rgba(255,255,255,0.03)"]}
+            style={styles.enterpriseCard}
+          >
+            <View style={styles.planHeader}>
+              <Text style={styles.planName}>{enterprisePlan.name}</Text>
+              <View style={[styles.badge, styles.enterpriseBadge]}>
+                <Text style={[styles.badgeText, styles.enterpriseBadgeText]}>
+                  {enterprisePlan.badge}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.enterpriseTitle}>
+              For advanced automation and higher daily volume
+            </Text>
+            <Text style={styles.planDescription}>
+              {enterprisePlan.description}
+            </Text>
+
+            {enterprisePlan.bullets.map((bullet) => (
+              <Text key={bullet} style={styles.planBullet}>
+                {bullet}
+              </Text>
+            ))}
+
+            <Pressable
+              style={styles.enterpriseButton}
+              onPress={() => void handlePlanPress(enterprisePlan)}
+            >
+              <Text style={styles.enterpriseButtonText}>
+                {enterprisePlan.buttonLabel}
+              </Text>
+            </Pressable>
+          </LinearGradient>
+        ) : null}
       </SectionCard>
     </PageScaffold>
   );
@@ -820,7 +864,40 @@ const styles = StyleSheet.create({
   planButtonTextActive: {
     color: palette.textWhite,
   },
+  enterpriseCard: {
+    marginTop: 18,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "rgba(0,194,168,0.24)",
+    gap: 10,
+  },
+  enterpriseBadge: {
+    backgroundColor: "rgba(0,194,168,0.16)",
+  },
+  enterpriseBadgeText: {
+    color: palette.accentTeal,
+  },
+  enterpriseTitle: {
+    color: palette.textWhite,
+    fontFamily: typography.bold,
+    fontSize: 16,
+  },
+  enterpriseButton: {
+    marginTop: 8,
+    borderRadius: 16,
+    backgroundColor: palette.primaryGreen,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  enterpriseButtonText: {
+    color: palette.textDark,
+    fontFamily: typography.extrabold,
+    fontSize: 14,
+  },
 });
+
 
 
 

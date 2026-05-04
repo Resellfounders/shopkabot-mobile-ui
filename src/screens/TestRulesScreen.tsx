@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -14,8 +15,12 @@ import { SectionCard } from "../components/SectionCard";
 import { TextField } from "../components/TextField";
 import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
-import { testAutoReplyMessage } from "../services/api";
-import { AutoReplyMessageTestResult } from "../types/autoReply";
+import { getBusinessReplyConfig, testAutoReplyMessage } from "../services/api";
+import {
+  AutoReplyAttachment,
+  AutoReplyMessageTestResult,
+  BusinessReplyConfig,
+} from "../types/autoReply";
 import { palette, typography, typeScale } from "../theme/palette";
 
 type ChatBubble = {
@@ -24,7 +29,79 @@ type ChatBubble = {
   text: string;
   meta?: string[];
   variant?: "success" | "muted";
+  attachments?: AutoReplyAttachment[];
 };
+
+function formatAttachmentSize(sizeBytes?: number | null) {
+  if (!sizeBytes || sizeBytes <= 0) {
+    return null;
+  }
+
+  const sizeInMb = sizeBytes / (1024 * 1024);
+  if (sizeInMb >= 1) {
+    return `${sizeInMb.toFixed(sizeInMb >= 10 ? 0 : 1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(sizeBytes / 1024))} KB`;
+}
+
+function AttachmentDetailsList({
+  attachments,
+}: {
+  attachments: AutoReplyAttachment[];
+}) {
+  if (!attachments.length) {
+    return null;
+  }
+
+  return (
+    <View style={styles.attachmentList}>
+      {attachments.map((attachment, index) => {
+        const label =
+          attachment.filename ||
+          attachment.caption ||
+          `${attachment.type === "image" ? "Image" : "Document"} ${index + 1}`;
+        const detailParts = [
+          attachment.type === "image" ? "Image" : "PDF",
+          attachment.mimeType || null,
+          formatAttachmentSize(attachment.sizeBytes),
+        ].filter(Boolean);
+
+        return (
+          <View
+            key={`${attachment.url}-${index}`}
+            style={styles.attachmentCardDocument}
+          >
+            <View style={styles.attachmentDocumentIcon}>
+              <Ionicons
+                name={
+                  attachment.type === "image"
+                    ? "image-outline"
+                    : "document-text-outline"
+                }
+                size={20}
+                color={palette.primaryGreen}
+              />
+            </View>
+            <View style={styles.attachmentCopy}>
+              <Text style={styles.attachmentTitle} numberOfLines={1}>
+                {label}
+              </Text>
+              {detailParts.length ? (
+                <Text style={styles.attachmentMeta}>
+                  {detailParts.join(" • ")}
+                </Text>
+              ) : null}
+              <Text style={styles.attachmentMeta} numberOfLines={1}>
+                {attachment.url}
+              </Text>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 export function TestTheBotScreen() {
   const { user } = useAuth();
@@ -34,6 +111,10 @@ export function TestTheBotScreen() {
   const [result, setResult] = useState<AutoReplyMessageTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chat, setChat] = useState<ChatBubble[]>([]);
+  const [replyConfig, setReplyConfig] = useState<BusinessReplyConfig | null>(
+    null,
+  );
+  const [loadingConfig, setLoadingConfig] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
 
   const activeIdentifiers = useMemo(() => {
@@ -42,16 +123,33 @@ export function TestTheBotScreen() {
     return {
       gmailId,
       businessId,
-      summary:
-        gmailId && businessId
-          ? "Using gmailId and businessId"
-          : gmailId
-            ? "Using gmailId"
-            : businessId
-              ? "Using businessId"
-              : "No test identity available",
     };
   }, [settings.businessId, user?.email]);
+
+  useEffect(() => {
+    const loadReplyConfig = async () => {
+      const businessId = settings.businessId.trim();
+      if (!businessId) {
+        setReplyConfig(null);
+        return;
+      }
+
+      setLoadingConfig(true);
+      try {
+        const config = await getBusinessReplyConfig({
+          baseUrl: settings.apiBaseUrl,
+          businessId,
+        });
+        setReplyConfig(config);
+      } catch {
+        setReplyConfig(null);
+      } finally {
+        setLoadingConfig(false);
+      }
+    };
+
+    void loadReplyConfig();
+  }, [settings.apiBaseUrl, settings.businessId]);
 
   const handleTest = async () => {
     if (!activeIdentifiers.gmailId && !activeIdentifiers.businessId) {
@@ -63,7 +161,6 @@ export function TestTheBotScreen() {
     }
 
     const trimmedMessage = message.trim();
-
     if (!trimmedMessage) {
       Alert.alert("Enter a message", "Add a customer message to test the bot.");
       return;
@@ -91,15 +188,20 @@ export function TestTheBotScreen() {
         },
       });
       setResult(response);
+
       setChat((current) => [
         ...current,
         {
           id: `bot-${Date.now()}`,
           role: "bot",
           text: response.matched
-            ? response.selectedReply || "Reply found."
+            ? response.finalReply ||
+              response.selectedReply ||
+              response.approvedReply ||
+              "Reply found."
             : "No reply matched this message yet.",
           variant: response.matched ? "success" : "muted",
+          attachments: response.matchedRule?.attachments || [],
           meta: response.matched
             ? [
                 response.matchedPhrase
@@ -108,16 +210,27 @@ export function TestTheBotScreen() {
                 response.matchType
                   ? `Rule: ${response.matchType.replace(/_/g, " ")}`
                   : "Rule unavailable",
+                response.matchedRule?.attachments?.length
+                  ? `Attachments: ${response.matchedRule.attachments.length}`
+                  : "Attachments: 0",
+                `Contextual: ${response.contextualReplyEnabled ? "On" : "Off"}`,
+                `Language: ${response.outputLanguage.replace(/_/g, " ")}`,
                 response.similarityScore !== null
                   ? `Score: ${Math.round(response.similarityScore * 100)}%`
                   : `Rules checked: ${response.evaluatedRules}`,
               ]
-            : [`Rules checked: ${response.evaluatedRules}`],
+            : [
+                `Contextual: ${response.contextualReplyEnabled ? "On" : "Off"}`,
+                `Language: ${response.outputLanguage.replace(/_/g, " ")}`,
+                `Rules checked: ${response.evaluatedRules}`,
+              ],
         },
       ]);
     } catch (testError) {
       const messageText =
-        testError instanceof Error ? testError.message : "Unable to test the bot.";
+        testError instanceof Error
+          ? testError.message
+          : "Unable to test the bot.";
       setError(messageText);
       setResult(null);
       setChat((current) => [
@@ -136,16 +249,30 @@ export function TestTheBotScreen() {
 
   return (
     <PageScaffold
-      title="Test The Bot"
-      subtitle="Test replies with the backend message processor."
+      title="Test Your Bot"
+      subtitle="Your bot will reply to your customers message like it replies to you here."
     >
       <SectionCard title="Chat Test">
         <View style={styles.identityCard}>
           <View>
-            <Text style={styles.identityLabel}>Test scope</Text>
-            <Text style={styles.identityValue}>{activeIdentifiers.summary}</Text>
+            <Text style={styles.identityLabel}>Smart reply config</Text>
+            {loadingConfig ? (
+              <View style={styles.loadingInline}>
+                <ActivityIndicator size="small" color={palette.primaryGreen} />
+              </View>
+            ) : (
+              <Text style={styles.identityValue}>
+                {replyConfig
+                  ? `${replyConfig.contextualReplyEnabled ? "Contextual on" : "Contextual off"} - ${replyConfig.outputLanguage.replace(/_/g, " ")}`
+                  : "Using default settings"}
+              </Text>
+            )}
           </View>
-          <Ionicons name="sparkles-outline" size={18} color={palette.primaryGreen} />
+          <Ionicons
+            name="options-outline"
+            size={18}
+            color={palette.primaryGreen}
+          />
         </View>
 
         <ScrollView
@@ -179,21 +306,18 @@ export function TestTheBotScreen() {
                     ]}
                   >
                     <Text
-                      style={[
-                        styles.chatRole,
-                        isUser && styles.chatRoleUser,
-                      ]}
+                      style={[styles.chatRole, isUser && styles.chatRoleUser]}
                     >
                       {isUser ? "You" : "Bot"}
                     </Text>
                     <Text
-                      style={[
-                        styles.chatText,
-                        isUser && styles.chatTextUser,
-                      ]}
+                      style={[styles.chatText, isUser && styles.chatTextUser]}
                     >
                       {entry.text}
                     </Text>
+                    {entry.attachments?.length ? (
+                      <AttachmentDetailsList attachments={entry.attachments} />
+                    ) : null}
                     {entry.meta?.length ? (
                       <View style={styles.metaList}>
                         {entry.meta.map((item) => (
@@ -216,7 +340,8 @@ export function TestTheBotScreen() {
               />
               <Text style={styles.emptyTitle}>Start a test chat</Text>
               <Text style={styles.emptyText}>
-                Try a customer message and see which rule responds.
+                Try a customer message and see whether a saved rule responds
+                before the main AI fallback.
               </Text>
             </View>
           )}
@@ -262,6 +387,24 @@ export function TestTheBotScreen() {
             <Text style={styles.ruleSummaryText}>
               {result.matchedRule.rule.replace(/_/g, " ")}
             </Text>
+            {result.approvedReply ? (
+              <Text style={styles.ruleSummaryHelper}>
+                Approved reply: {result.approvedReply}
+              </Text>
+            ) : null}
+            {result.finalReply && result.finalReply !== result.approvedReply ? (
+              <Text style={styles.ruleSummaryHelper}>
+                Final reply: {result.finalReply}
+              </Text>
+            ) : null}
+            {result.matchedRule.attachments?.length ? (
+              <View style={styles.ruleSummaryAttachments}>
+                <Text style={styles.ruleSummaryHelper}>Attachments</Text>
+                <AttachmentDetailsList
+                  attachments={result.matchedRule.attachments}
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
       </SectionCard>
@@ -292,6 +435,16 @@ const styles = StyleSheet.create({
     color: palette.textWhite,
     fontFamily: typography.bold,
     fontSize: typeScale.label,
+  },
+  identityHelper: {
+    color: "rgba(255,255,255,0.58)",
+    fontFamily: typography.medium,
+    fontSize: typeScale.caption,
+    marginTop: 4,
+  },
+  loadingInline: {
+    marginTop: 6,
+    alignItems: "flex-start",
   },
   chatStream: {
     maxHeight: 420,
@@ -349,6 +502,43 @@ const styles = StyleSheet.create({
   },
   metaList: {
     gap: 3,
+  },
+  attachmentList: {
+    gap: 8,
+    marginTop: 4,
+  },
+  attachmentCardDocument: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    padding: 10,
+  },
+  attachmentDocumentIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "rgba(37,211,102,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  attachmentCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  attachmentTitle: {
+    color: palette.textWhite,
+    fontFamily: typography.semibold,
+    fontSize: 13,
+  },
+  attachmentMeta: {
+    color: "rgba(255,255,255,0.62)",
+    fontFamily: typography.medium,
+    fontSize: 12,
+    marginTop: 2,
   },
   metaText: {
     color: "rgba(255,255,255,0.62)",
@@ -412,6 +602,16 @@ const styles = StyleSheet.create({
     color: palette.textWhite,
     fontFamily: typography.bold,
     fontSize: typeScale.bodySecondary,
+  },
+  ruleSummaryHelper: {
+    color: "rgba(255,255,255,0.72)",
+    fontFamily: typography.medium,
+    fontSize: typeScale.caption,
+    lineHeight: 18,
+  },
+  ruleSummaryAttachments: {
+    gap: 6,
+    marginTop: 2,
   },
   emptyState: {
     minHeight: 280,

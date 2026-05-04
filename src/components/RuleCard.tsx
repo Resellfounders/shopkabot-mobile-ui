@@ -11,6 +11,11 @@ type RuleCardProps = {
 };
 
 export function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
+  const attachmentPreview =
+    rule.attachments
+      ?.slice(0, 2)
+      .map((attachment) => attachment.filename || attachment.url) || [];
+
   return (
     <View style={styles.card}>
       <View style={styles.topRow}>
@@ -27,9 +32,12 @@ export function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
       </Text>
       <Text style={styles.caption}>
         {rule.incomingMessage.length} trigger phrase
-        {rule.incomingMessage.length === 1 ? "" : "s"} •{" "}
-        {rule.replyMessage.length} reply option
+        {rule.incomingMessage.length === 1 ? "" : "s"} • {rule.replyMessage.length}{" "}
+        reply option
         {rule.replyMessage.length === 1 ? "" : "s"}
+        {rule.attachments?.length
+          ? ` • ${rule.attachments.length} attachment${rule.attachments.length === 1 ? "" : "s"}`
+          : ""}
       </Text>
 
       <View style={styles.previewBlock}>
@@ -45,6 +53,13 @@ export function RuleCard({ rule, onEdit, onDelete }: RuleCardProps) {
           {rule.replyMessage.slice(0, 2).join(" • ")}
         </Text>
       </View>
+
+      {attachmentPreview.length ? (
+        <View style={styles.previewBlock}>
+          <Text style={styles.previewLabel}>Attachments</Text>
+          <Text style={styles.previewText}>{attachmentPreview.join(" • ")}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.actions}>
         <Pressable style={styles.secondaryButton} onPress={() => onEdit(rule)}>
