@@ -1,13 +1,19 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
+import { Platform } from "react-native";
 
 import { StoredAppSettings } from "../types/autoReply";
 
 const STORAGE_KEY = "shopkabot_mobile_settings";
+const DEFAULT_API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL ||
+  (Platform.OS === "android"
+    ? "http://10.0.2.2:8000"
+    : "http://localhost:8000");
 
 const defaultSettings: StoredAppSettings = {
-  apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL || "http://10.0.2.2:8000",
+  apiBaseUrl: DEFAULT_API_BASE_URL,
   businessId: "",
   businessName: "ShopKaBot Business",
   botActive: false,

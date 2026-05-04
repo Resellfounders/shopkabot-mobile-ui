@@ -1,6 +1,12 @@
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createDrawerNavigator } from "@react-navigation/drawer";
-import { ActivityIndicator, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppDrawerContent } from "../components/AppDrawerContent";
@@ -88,21 +94,19 @@ export function AppNavigator() {
           component={RulesScreen}
           options={{ drawerLabel: "Train The Bot" }}
         />
-        <Drawer.Screen
-          name="Test The Bot"
-          component={TestTheBotScreen}
-        />
+        <Drawer.Screen name="Test The Bot" component={TestTheBotScreen} />
         <Drawer.Screen name="Reply History" component={ReplyHistoryScreen} />
-        <Drawer.Screen name="Disable AI Reply" component={DisableAiReplyScreen} />
+        <Drawer.Screen
+          name="Disable AI Reply"
+          component={DisableAiReplyScreen}
+          options={{ drawerLabel: "AI Chatbot Settings" }}
+        />
         <Drawer.Screen name="Subscription" component={SubscriptionScreen} />
         <Drawer.Screen
           name="Connect WhatsApp"
           component={ConnectWhatsAppScreen}
         />
-        <Drawer.Screen
-          name="Help / About"
-          component={HelpAboutScreen}
-        />
+        <Drawer.Screen name="Help / About" component={HelpAboutScreen} />
       </Drawer.Navigator>
     </NavigationContainer>
   );
@@ -125,4 +129,3 @@ const styles = StyleSheet.create({
     backgroundColor: palette.cardBackgroundAlt,
   },
 });
-

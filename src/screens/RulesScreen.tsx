@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -33,13 +34,17 @@ import {
 } from "../types/autoReply";
 import { palette, typography } from "../theme/palette";
 
+const FREE_RULE_LIMIT = 5;
+
 export function RulesScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { user } = useAuth();
   const { settings } = useAppSettings();
-  const { hasActiveSubscription } = useCurrentSubscription();
+  const { hasActiveSubscription, loadingSubscription } =
+    useCurrentSubscription();
   const [rules, setRules] = useState<AutoReplyMessage[]>([]);
+  const [totalRuleCount, setTotalRuleCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,12 +67,19 @@ export function RulesScreen() {
 
       setError(null);
       try {
-        const result = await listAutoReplyMessages({
-          baseUrl: settings.apiBaseUrl,
-          gmailId: user.email,
-          businessId: settings.businessId || undefined,
-        });
-        setRules(result);
+        const [scopedRules, allAccountRules] = await Promise.all([
+          listAutoReplyMessages({
+            baseUrl: settings.apiBaseUrl,
+            gmailId: user.email,
+            businessId: settings.businessId || undefined,
+          }),
+          listAutoReplyMessages({
+            baseUrl: settings.apiBaseUrl,
+            gmailId: user.email,
+          }),
+        ]);
+        setRules(scopedRules);
+        setTotalRuleCount(allAccountRules.length);
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -81,6 +93,12 @@ export function RulesScreen() {
     },
     [settings.apiBaseUrl, settings.businessId, user?.email],
   );
+
+  const hasReachedFreeRuleLimit =
+    !loadingSubscription &&
+    !hasActiveSubscription &&
+    totalRuleCount >= FREE_RULE_LIMIT;
+  const remainingFreeRules = Math.max(0, FREE_RULE_LIMIT - totalRuleCount);
 
   useFocusEffect(
     useCallback(() => {
@@ -111,22 +129,59 @@ export function RulesScreen() {
     hasActiveSubscription &&
     (!settings.businessId.trim() || !settings.whatsappConnection);
 
+  const showRuleLimitLockedState = useCallback(() => {
+    const message = `Free plan allows up to ${FREE_RULE_LIMIT} training rules. Subscribe to unlock more rule creation.`;
+
+    if (Platform.OS === "web") {
+      globalThis.alert?.(message);
+      navigation.navigate("Subscription");
+      return;
+    }
+
+    Alert.alert("Rule limit reached", message, [
+      { text: "Not now", style: "cancel" },
+      {
+        text: "Go to Subscription",
+        onPress: () => navigation.navigate("Subscription"),
+      },
+    ]);
+  }, [navigation]);
+
+  const openCreateRuleEditor = useCallback(
+    (draft?: TrainingDraft | null) => {
+      if (hasReachedFreeRuleLimit) {
+        showRuleLimitLockedState();
+        return;
+      }
+
+      setEditingRule(null);
+      setInitialDraft(draft ?? null);
+      setEditorVisible(true);
+    },
+    [hasReachedFreeRuleLimit, showRuleLimitLockedState],
+  );
+
   useEffect(() => {
     const draft = route.params?.prefillTraining as TrainingDraft | undefined;
     if (!draft) {
       return;
     }
 
-    setEditingRule(null);
-    setInitialDraft(draft);
-    setEditorVisible(true);
+    openCreateRuleEditor(draft);
     navigation.setParams({ prefillTraining: undefined });
-  }, [navigation, route.params?.prefillTraining]);
+  }, [navigation, openCreateRuleEditor, route.params?.prefillTraining]);
 
   const handleSave = async (
     payload: AutoReplyMessagePayload,
     editingId?: string,
   ) => {
+    if (!editingId && hasReachedFreeRuleLimit) {
+      showRuleLimitLockedState();
+      throw new Error(
+        `Free plan allows up to ${FREE_RULE_LIMIT} training rules.`,
+      );
+    }
+
     try {
       if (editingId) {
         await updateAutoReplyMessage({
@@ -153,6 +208,33 @@ export function RulesScreen() {
   };
 
   const handleDelete = (rule: AutoReplyMessage) => {
+    const deleteRule = async () => {
+      try {
+        await deleteAutoReplyMessage({
+          baseUrl: settings.apiBaseUrl,
+          id: rule.id,
+        });
+        await fetchRules();
+      } catch (deleteError) {
+        Alert.alert(
+          "Delete failed",
+          deleteError instanceof Error
+            ? deleteError.message
+            : "Please try again.",
+        );
+      }
+    };
+
+    if (Platform.OS === "web") {
+      const confirmed = globalThis.confirm?.(
+        "This auto-reply rule will be removed permanently.",
+      );
+      if (confirmed) {
+        void deleteRule();
+      }
+      return;
+    }
+
     Alert.alert(
       "Delete rule",
       "This auto-reply rule will be removed permanently.",
@@ -161,21 +243,8 @@ export function RulesScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteAutoReplyMessage({
-                baseUrl: settings.apiBaseUrl,
-                id: rule.id,
-              });
-              await fetchRules();
-            } catch (deleteError) {
-              Alert.alert(
-                "Delete failed",
-                deleteError instanceof Error
-                  ? deleteError.message
-                  : "Please try again.",
-              );
-            }
+          onPress: () => {
+            void deleteRule();
           },
         },
       ],
@@ -191,17 +260,56 @@ export function RulesScreen() {
             <Text style={styles.stepText}>
               Add the message, matching rule, and reply.
             </Text>
+            {!loadingSubscription && !hasActiveSubscription ? (
+              <View
+                style={[
+                  styles.limitBanner,
+                  hasReachedFreeRuleLimit
+                    ? styles.limitBannerLocked
+                    : styles.limitBannerOpen,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    hasReachedFreeRuleLimit
+                      ? "lock-closed-outline"
+                      : "sparkles-outline"
+                  }
+                  size={16}
+                  color={
+                    hasReachedFreeRuleLimit
+                      ? palette.warning
+                      : palette.primaryGreen
+                  }
+                />
+                <Text
+                  style={[
+                    styles.limitBannerText,
+                    hasReachedFreeRuleLimit && styles.limitBannerTextLocked,
+                  ]}
+                >
+                  {hasReachedFreeRuleLimit
+                    ? `Free plan limit reached: ${totalRuleCount}/${FREE_RULE_LIMIT} rules used`
+                    : `Free plan: ${totalRuleCount}/${FREE_RULE_LIMIT} rules used. ${remainingFreeRules} left before unlock is required.`}
+                </Text>
+              </View>
+            ) : null}
             <Pressable
-              style={styles.inlineCreateButton}
-              onPress={() => {
-                setEditingRule(null);
-                setInitialDraft(null);
-                setEditorVisible(true);
-              }}
+              style={[
+                styles.inlineCreateButton,
+                hasReachedFreeRuleLimit && styles.inlineCreateButtonLocked,
+              ]}
+              onPress={() => openCreateRuleEditor()}
             >
-              <Ionicons name="add" size={18} color={palette.textDark} />
+              <Ionicons
+                name={hasReachedFreeRuleLimit ? "lock-closed" : "add"}
+                size={18}
+                color={palette.textDark}
+              />
               <Text style={styles.inlineCreateButtonText}>
-                Add Training Example
+                {hasReachedFreeRuleLimit
+                  ? "Unlock More Rules"
+                  : "Add Training Example"}
               </Text>
             </Pressable>
           </View>
@@ -263,29 +371,33 @@ export function RulesScreen() {
       </PageScaffold>
 
       <Pressable
-        style={styles.fab}
-        onPress={() => {
-          setEditingRule(null);
-          setInitialDraft(null);
-          setEditorVisible(true);
-        }}
+        style={[styles.fab, hasReachedFreeRuleLimit && styles.fabLocked]}
+        onPress={() => openCreateRuleEditor()}
       >
-        <Ionicons name="add" size={30} color={palette.textDark} />
+        <Ionicons
+          name={hasReachedFreeRuleLimit ? "lock-closed" : "add"}
+          size={30}
+          color={palette.textDark}
+        />
       </Pressable>
 
-      {!hasActiveSubscription ? (
+      {!loadingSubscription && !hasActiveSubscription ? (
         <View style={styles.bottomStepBar}>
           <View style={styles.bottomStepCopy}>
             <Text style={styles.bottomStepLabel}>Next Step</Text>
             <Text style={styles.bottomStepText}>
-              Go to Subscription to activate the bot.
+              {hasReachedFreeRuleLimit
+                ? `You have used all ${FREE_RULE_LIMIT} free rules. Subscribe to keep training the bot.`
+                : "Go to Subscription to activate the bot."}
             </Text>
           </View>
           <Pressable
             style={styles.activateButton}
             onPress={() => navigation.navigate("Subscription")}
           >
-            <Text style={styles.activateButtonText}>Activate Bot</Text>
+            <Text style={styles.activateButtonText}>
+              {hasReachedFreeRuleLimit ? "Unlock Rules" : "Activate Bot"}
+            </Text>
           </Pressable>
         </View>
       ) : needsBusinessOnboarding ? (
@@ -311,6 +423,7 @@ export function RulesScreen() {
         initialDraft={initialDraft}
         gmailId={user?.email || ""}
         businessId={settings.businessId.trim() || null}
+        apiBaseUrl={settings.apiBaseUrl}
         onClose={() => {
           setEditorVisible(false);
           setEditingRule(null);
@@ -350,6 +463,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
+  limitBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  limitBannerOpen: {
+    backgroundColor: "rgba(37,211,102,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(37,211,102,0.2)",
+  },
+  limitBannerLocked: {
+    backgroundColor: "rgba(255,159,67,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,159,67,0.25)",
+  },
+  limitBannerText: {
+    flex: 1,
+    color: "rgba(255,255,255,0.78)",
+    fontFamily: typography.medium,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  limitBannerTextLocked: {
+    color: palette.warning,
+  },
   inlineCreateButton: {
     alignSelf: "flex-start",
     flexDirection: "row",
@@ -360,6 +501,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: palette.primaryGreen,
     marginTop: 2,
+  },
+  inlineCreateButtonLocked: {
+    backgroundColor: "#D8A019",
   },
   inlineCreateButtonText: {
     color: palette.textDark,
@@ -412,6 +556,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowRadius: 16,
     elevation: 10,
+  },
+  fabLocked: {
+    backgroundColor: "#D8A019",
   },
   bottomStepBar: {
     position: "absolute",

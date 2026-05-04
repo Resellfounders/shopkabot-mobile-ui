@@ -56,7 +56,7 @@ export function BusinessSettingsScreen() {
           label="API base URL"
           value={form.apiBaseUrl}
           onChangeText={(value) => setForm((current) => ({ ...current, apiBaseUrl: value }))}
-          placeholder="http://10.0.2.2:8000"
+          placeholder="http://localhost:8000"
         />
 
         <View style={styles.switchRow}>

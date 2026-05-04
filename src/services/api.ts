@@ -1,10 +1,12 @@
 import {
+  AutoReplyAttachment,
   AutoReplyMessage,
   AutoReplyMessagePayload,
   AutoReplyMessageTestPayload,
   AutoReplyMessageTestResult,
   BusinessReplyConfig,
   ChatHistoryMessage,
+  OutputLanguage,
 } from "../types/autoReply";
 
 function normalizeBaseUrl(baseUrl: string) {
@@ -16,9 +18,11 @@ async function request<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  const isFormDataBody =
+    typeof FormData !== "undefined" && options?.body instanceof FormData;
   const response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
       ...(options?.headers || {}),
     },
     ...options,
@@ -115,6 +119,31 @@ export async function testAutoReplyMessage(params: {
   );
 }
 
+export async function uploadAutoReplyAttachment(params: {
+  baseUrl: string;
+  file: File;
+  gmailId?: string | null;
+  businessId?: string | null;
+}) {
+  const formData = new FormData();
+  formData.append("file", params.file);
+  if (params.gmailId?.trim()) {
+    formData.append("gmailId", params.gmailId.trim());
+  }
+  if (params.businessId?.trim()) {
+    formData.append("businessId", params.businessId.trim());
+  }
+
+  return request<AutoReplyAttachment>(
+    params.baseUrl,
+    "/admin/auto-reply-messages/attachments/upload",
+    {
+      method: "POST",
+      body: formData,
+    },
+  );
+}
+
 export async function getBusinessReplyConfig(params: {
   baseUrl: string;
   businessId: string;
@@ -122,6 +151,26 @@ export async function getBusinessReplyConfig(params: {
   return request<BusinessReplyConfig>(
     params.baseUrl,
     `/admin/business-reply-config/${encodeURIComponent(params.businessId)}`,
+  );
+}
+
+export async function updateBusinessReplyConfig(params: {
+  baseUrl: string;
+  businessId: string;
+  payload: {
+    disableAIReplies?: string[];
+    autoReplyEnabled?: boolean;
+    contextualReplyEnabled?: boolean;
+    outputLanguage?: OutputLanguage;
+  };
+}) {
+  return request<BusinessReplyConfig & { status: string }>(
+    params.baseUrl,
+    `/admin/business-reply-config/${encodeURIComponent(params.businessId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(params.payload),
+    },
   );
 }
 

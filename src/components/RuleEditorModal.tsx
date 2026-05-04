@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,12 +12,14 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import {
+  AutoReplyAttachment,
   AutoReplyMessage,
   AutoReplyMessagePayload,
   TrainingDraft,
 } from "../types/autoReply";
 import { palette, typography } from "../theme/palette";
 import { TextField } from "./TextField";
+import { uploadAutoReplyAttachment } from "../services/api";
 
 type RuleEditorModalProps = {
   visible: boolean;
@@ -24,6 +27,7 @@ type RuleEditorModalProps = {
   initialDraft?: TrainingDraft | null;
   gmailId: string;
   businessId: string | null;
+  apiBaseUrl: string;
   onClose: () => void;
   onSubmit: (
     payload: AutoReplyMessagePayload,
@@ -31,12 +35,36 @@ type RuleEditorModalProps = {
   ) => Promise<void>;
 };
 
-const ruleSuggestions = [
-  "exact_match",
-  "contains_phrase",
-  "starts_with",
-  "smart_intent_match",
-];
+const ruleOptions = [
+  {
+    value: "exact",
+    label: "Exact Match",
+    description: "Use this when the customer message should match word for word.",
+  },
+  {
+    value: "contains",
+    label: "Contains Phrase",
+    description: "Use this when one important phrase inside the message is enough.",
+  },
+  {
+    value: "starts_with",
+    label: "Starts With",
+    description: "Use this when the opening words matter most.",
+  },
+  {
+    value: "smart_intent",
+    label: "Smart Intent",
+    description: "AI decides when this rule fits, even if the wording is different.",
+  },
+] as const;
+
+function normalizeRuleValue(value: string | null | undefined) {
+  const cleaned = (value || "").trim().toLowerCase();
+  if (cleaned === "smart_intent_match") {
+    return "smart_intent";
+  }
+  return cleaned || "smart_intent";
+}
 
 export function RuleEditorModal({
   visible,
@@ -44,23 +72,27 @@ export function RuleEditorModal({
   initialDraft,
   gmailId,
   businessId,
+  apiBaseUrl,
   onClose,
   onSubmit,
 }: RuleEditorModalProps) {
   const [incomingMessages, setIncomingMessages] = useState<string[]>([""]);
-  const [rule, setRule] = useState("contains_phrase");
+  const [rule, setRule] = useState("smart_intent");
   const [replyMessages, setReplyMessages] = useState<string[]>([""]);
+  const [attachments, setAttachments] = useState<AutoReplyAttachment[]>([]);
   const [saving, setSaving] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   useEffect(() => {
     if (editingRule) {
       setIncomingMessages(
         editingRule.incomingMessage.length ? editingRule.incomingMessage : [""],
       );
-      setRule(editingRule.rule);
+      setRule(normalizeRuleValue(editingRule.rule));
       setReplyMessages(
         editingRule.replyMessage.length ? editingRule.replyMessage : [""],
       );
+      setAttachments(editingRule.attachments?.length ? editingRule.attachments : []);
       return;
     }
 
@@ -68,16 +100,18 @@ export function RuleEditorModal({
       setIncomingMessages(
         initialDraft.incomingMessage.length ? initialDraft.incomingMessage : [""],
       );
-      setRule(initialDraft.rule || "contains_phrase");
+      setRule(normalizeRuleValue(initialDraft.rule));
       setReplyMessages(
         initialDraft.replyMessage.length ? initialDraft.replyMessage : [""],
       );
+      setAttachments([]);
       return;
     }
 
     setIncomingMessages([""]);
-    setRule("contains_phrase");
+    setRule("smart_intent");
     setReplyMessages([""]);
+    setAttachments([]);
   }, [editingRule, initialDraft, visible]);
 
   const updateListItem = (
@@ -114,9 +148,101 @@ export function RuleEditorModal({
   const sanitizeItems = (items: string[]) =>
     items.map((item) => item.trim()).filter(Boolean);
 
+  const selectedRuleOption =
+    ruleOptions.find((option) => option.value === rule) || ruleOptions[3];
+
+  const updateAttachment = (
+    index: number,
+    field: keyof AutoReplyAttachment,
+    value: string,
+  ) => {
+    setAttachments((current) =>
+      current.map((attachment, attachmentIndex) =>
+        attachmentIndex === index
+          ? {
+              ...attachment,
+              [field]: value,
+            }
+          : attachment,
+      ),
+    );
+  };
+
+  const addAttachment = () => {
+    setAttachments((current) => [
+      ...current,
+      {
+        type: "document",
+        url: "",
+        filename: "",
+        caption: "",
+      },
+    ]);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((current) =>
+      current.filter((_, attachmentIndex) => attachmentIndex !== index),
+    );
+  };
+
+  const sanitizeAttachments = (items: AutoReplyAttachment[]) =>
+    items
+      .map((attachment) => ({
+        type: attachment.type === "image" ? "image" : "document",
+        url: attachment.url.trim(),
+        filename: attachment.filename?.trim() || null,
+        mimeType: attachment.mimeType?.trim() || null,
+        caption: attachment.caption?.trim() || null,
+        sizeBytes: attachment.sizeBytes ?? null,
+        storageProvider: attachment.storageProvider?.trim() || null,
+        blobPath: attachment.blobPath?.trim() || null,
+      }))
+      .filter((attachment) => attachment.url);
+
+  const handleUploadAttachment = async () => {
+    if (Platform.OS !== "web" || typeof document === "undefined") {
+      Alert.alert(
+        "Web upload only",
+        "Use the manual attachment URL fields on native for now.",
+      );
+      return;
+    }
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/pdf,image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      setUploadingAttachment(true);
+      try {
+        const uploaded = await uploadAutoReplyAttachment({
+          baseUrl: apiBaseUrl,
+          file,
+          gmailId,
+          businessId,
+        });
+        setAttachments((current) => [...current, uploaded]);
+      } catch (error) {
+        Alert.alert(
+          "Upload failed",
+          error instanceof Error ? error.message : "Please try again.",
+        );
+      } finally {
+        setUploadingAttachment(false);
+      }
+    };
+    input.click();
+  };
+
   const handleSubmit = async () => {
     const sanitizedIncomingMessages = sanitizeItems(incomingMessages);
     const sanitizedReplyMessages = sanitizeItems(replyMessages);
+    const sanitizedAttachments = sanitizeAttachments(attachments);
 
     if (!sanitizedIncomingMessages.length) {
       Alert.alert(
@@ -138,8 +264,15 @@ export function RuleEditorModal({
       businessId,
       gmailId,
       incomingMessage: sanitizedIncomingMessages,
+      originalIncomingMessage: sanitizedIncomingMessages,
       rule: rule.trim(),
       replyMessage: sanitizedReplyMessages,
+      source: editingRule?.source || "manual",
+      category: editingRule?.category || "faq",
+      language: editingRule?.language || "mixed",
+      confidence: editingRule?.confidence ?? 0.7,
+      isActive: editingRule?.isActive ?? true,
+      attachments: sanitizedAttachments,
     };
 
     setSaving(true);
@@ -265,16 +398,16 @@ export function RuleEditorModal({
               </View>
 
               <View style={styles.rulePills}>
-                {ruleSuggestions.map((suggestion) => {
-                  const isActive = rule === suggestion;
+                {ruleOptions.map((option) => {
+                  const isActive = rule === option.value;
                   return (
                     <Pressable
-                      key={suggestion}
+                      key={option.value}
                       style={[
                         styles.rulePill,
                         isActive && styles.rulePillActive,
                       ]}
-                      onPress={() => setRule(suggestion)}
+                      onPress={() => setRule(option.value)}
                     >
                       <Text
                         style={[
@@ -282,20 +415,19 @@ export function RuleEditorModal({
                           isActive && styles.rulePillTextActive,
                         ]}
                       >
-                        {suggestion.replace(/_/g, " ")}
+                        {option.label}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
 
-              <TextField
-                label="Backend rule value"
-                helper="Use smart_intent_match for fuzzy message similarity instead of exact wording."
-                value={rule}
-                onChangeText={setRule}
-                placeholder="contains_phrase"
-              />
+              <View style={styles.ruleHelpCard}>
+                <Text style={styles.ruleHelpTitle}>{selectedRuleOption.label}</Text>
+                <Text style={styles.ruleHelpText}>
+                  {selectedRuleOption.description}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.editorSection}>
@@ -373,6 +505,122 @@ export function RuleEditorModal({
                   Source: {initialDraft.sourceLabel}
                 </Text>
               ) : null}
+            </View>
+
+            <View style={styles.editorSection}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionNumber}>
+                  <Text style={styles.sectionNumberText}>4</Text>
+                </View>
+                <View style={styles.sectionHeaderCopy}>
+                  <Text style={styles.sectionTitle}>Attachments</Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Attach PDF or image files that should be sent when this rule
+                    matches. You can upload on web or paste a hosted URL
+                    manually.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.attachmentActions}>
+                <Pressable
+                  style={[
+                    styles.addButton,
+                    uploadingAttachment && styles.primaryButtonDisabled,
+                  ]}
+                  onPress={() => void handleUploadAttachment()}
+                  disabled={uploadingAttachment}
+                >
+                  <Ionicons
+                    name="cloud-upload-outline"
+                    size={18}
+                    color={palette.primaryGreen}
+                  />
+                  <Text style={styles.addButtonText}>
+                    {uploadingAttachment ? "Uploading..." : "Upload file"}
+                  </Text>
+                </Pressable>
+
+                <Pressable style={styles.addButton} onPress={addAttachment}>
+                  <Ionicons name="add" size={18} color={palette.primaryGreen} />
+                  <Text style={styles.addButtonText}>Add manual link</Text>
+                </Pressable>
+              </View>
+
+              {attachments.length ? (
+                <View style={styles.itemList}>
+                  {attachments.map((attachment, index) => (
+                    <View key={`attachment-${index}`} style={styles.trainingItem}>
+                      <View style={styles.rulePills}>
+                        {(["document", "image"] as const).map((typeOption) => {
+                          const isActive = attachment.type === typeOption;
+                          return (
+                            <Pressable
+                              key={`${index}-${typeOption}`}
+                              style={[
+                                styles.rulePill,
+                                isActive && styles.rulePillActive,
+                              ]}
+                              onPress={() =>
+                                updateAttachment(index, "type", typeOption)
+                              }
+                            >
+                              <Text
+                                style={[
+                                  styles.rulePillText,
+                                  isActive && styles.rulePillTextActive,
+                                ]}
+                              >
+                                {typeOption}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+
+                      <TextField
+                        label="Attachment URL"
+                        value={attachment.url}
+                        onChangeText={(value) =>
+                          updateAttachment(index, "url", value)
+                        }
+                        placeholder="https://cdn.shopkabot.com/your-file.pdf"
+                      />
+                      <TextField
+                        label="Filename"
+                        value={attachment.filename || ""}
+                        onChangeText={(value) =>
+                          updateAttachment(index, "filename", value)
+                        }
+                        placeholder="menu.pdf or catalog.jpg"
+                      />
+                      <TextField
+                        label="Optional caption"
+                        value={attachment.caption || ""}
+                        onChangeText={(value) =>
+                          updateAttachment(index, "caption", value)
+                        }
+                        placeholder="Optional caption sent with the file"
+                      />
+                      <Pressable
+                        style={styles.removeButton}
+                        onPress={() => removeAttachment(index)}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={16}
+                          color="rgba(255,255,255,0.72)"
+                        />
+                        <Text style={styles.removeButtonText}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.sectionSubtitle}>
+                  No attachments yet. Replies can still send text only.
+                </Text>
+              )}
             </View>
           </ScrollView>
 
@@ -544,6 +792,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+  },
+  ruleHelpCard: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: "rgba(37,211,102,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(37,211,102,0.18)",
+    gap: 4,
+  },
+  ruleHelpTitle: {
+    color: palette.textWhite,
+    fontFamily: typography.bold,
+    fontSize: 14,
+  },
+  ruleHelpText: {
+    color: "rgba(255,255,255,0.72)",
+    fontFamily: typography.medium,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  attachmentActions: {
+    gap: 10,
   },
   rulePill: {
     paddingHorizontal: 12,

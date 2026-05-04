@@ -25,6 +25,7 @@ import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { useCurrentSubscription } from "../hooks/useCurrentSubscription";
 import { attachBusinessToCurrentSubscription } from "../services/razorpay";
+import { updateBusinessReplyConfig } from "../services/api";
 import {
   getWhatsAppUserSettings,
   setupWhatsAppBusinessAccount,
@@ -482,6 +483,22 @@ export function ConnectWhatsAppScreen() {
               : "WhatsApp was connected, but the subscription business link could not be updated yet.",
           );
         }
+      }
+
+      try {
+        await updateBusinessReplyConfig({
+          baseUrl: settings.apiBaseUrl,
+          businessId: wabaId,
+          payload: {
+            autoReplyEnabled: true,
+          },
+        });
+      } catch (error) {
+        setSyncNote(
+          error instanceof Error
+            ? `${error.message} WhatsApp was connected, but auto-reply could not be enabled yet.`
+            : "WhatsApp was connected, but auto-reply could not be enabled yet.",
+        );
       }
 
       await persistConnection(nextConnection);
