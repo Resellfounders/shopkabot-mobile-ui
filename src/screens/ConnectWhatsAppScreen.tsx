@@ -474,7 +474,7 @@ export function ConnectWhatsAppScreen() {
             businessName: nextConnection.displayName || settings.businessName,
           });
           setSyncNote(
-            "WhatsApp Business connected and the latest Gmail-linked subscription was updated with this business.",
+            "WhatsApp Business connected. We linked this business to your subscription and backfilled existing auto-reply rules for this Gmail account.",
           );
         } catch (error) {
           setSyncNote(
