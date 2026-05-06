@@ -7,6 +7,7 @@ import { PageScaffold } from "../components/PageScaffold";
 import { SectionCard } from "../components/SectionCard";
 import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
+import { useUserSettingsBusiness } from "../hooks/useUserSettingsBusiness";
 import { listAutoReplyMessages } from "../services/api";
 import { AutoReplyMessage } from "../types/autoReply";
 import { formatRelativeDate } from "../utils/format";
@@ -15,6 +16,7 @@ import { palette, typography } from "../theme/palette";
 export function DashboardScreen() {
   const { user } = useAuth();
   const { settings } = useAppSettings();
+  const { resolvedBusinessId } = useUserSettingsBusiness();
   const [rules, setRules] = useState<AutoReplyMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export function DashboardScreen() {
       const result = await listAutoReplyMessages({
         baseUrl: settings.apiBaseUrl,
         gmailId: user.email,
-        businessId: settings.businessId || undefined,
+        businessId: resolvedBusinessId || undefined,
       });
       setRules(result);
     } catch (loadError) {
@@ -38,7 +40,7 @@ export function DashboardScreen() {
     } finally {
       setLoading(false);
     }
-  }, [settings.apiBaseUrl, settings.businessId, user?.email]);
+  }, [resolvedBusinessId, settings.apiBaseUrl, user?.email]);
 
   useFocusEffect(
     useCallback(() => {
@@ -89,7 +91,7 @@ export function DashboardScreen() {
             <View style={styles.snapshotCard}>
               <Text style={styles.snapshotLabel}>Training workspace</Text>
               <Text style={styles.snapshotValue}>
-                {settings.businessId || "No business selected yet"}
+                {resolvedBusinessId || "No business selected yet"}
               </Text>
             </View>
             <View style={styles.snapshotCard}>
