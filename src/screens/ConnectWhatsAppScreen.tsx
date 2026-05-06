@@ -29,6 +29,7 @@ import { updateBusinessReplyConfig } from "../services/api";
 import {
   getWhatsAppUserSettings,
   setupWhatsAppBusinessAccount,
+  type UserSettingsResponse,
 } from "../services/whatsappConnection";
 import { WhatsAppBusinessConnection } from "../types/autoReply";
 import { palette, typography } from "../theme/palette";
@@ -176,6 +177,9 @@ export function ConnectWhatsAppScreen() {
   );
   const [lastEvent, setLastEvent] = useState<EmbeddedSignupMessage | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [backendBusinessSettings, setBackendBusinessSettings] = useState<
+    UserSettingsResponse["businessSettings"] | null
+  >(null);
 
   const signupRef = useRef<{
     waba_id?: string;
@@ -274,6 +278,7 @@ export function ConnectWhatsAppScreen() {
           return false;
         }
 
+        setBackendBusinessSettings(businessSettings);
         await persistConnection({
           wabaId: businessSettings.businessId,
           phoneNumberId: businessSettings.phoneNumberId,
@@ -317,6 +322,12 @@ export function ConnectWhatsAppScreen() {
       setStatus("connected");
     }
   }, [connection]);
+
+  useEffect(() => {
+    if (backendBusinessSettings?.businessId && backendBusinessSettings.phoneNumberId) {
+      setStatus("connected");
+    }
+  }, [backendBusinessSettings?.businessId, backendBusinessSettings?.phoneNumberId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -449,6 +460,9 @@ export function ConnectWhatsAppScreen() {
           nextConnection.phoneNumber =
             synced.businessSettings?.fullPhoneNumber ||
             nextConnection.phoneNumber;
+          if (synced.businessSettings) {
+            setBackendBusinessSettings(synced.businessSettings);
+          }
 
           setSyncNote("Business account synced with the backend.");
         } catch (error) {
@@ -799,6 +813,24 @@ export function ConnectWhatsAppScreen() {
     setConnecting(false);
   }, []);
 
+  const resolvedBusinessName =
+    backendBusinessSettings?.name?.trim() ||
+    connection?.displayName ||
+    settings.businessName;
+  const resolvedPhoneNumber =
+    backendBusinessSettings?.fullPhoneNumber?.trim() ||
+    connection?.phoneNumber ||
+    null;
+  const resolvedWabaId =
+    backendBusinessSettings?.businessId?.trim() ||
+    connection?.wabaId ||
+    settings.businessId ||
+    null;
+  const resolvedPhoneNumberId =
+    backendBusinessSettings?.phoneNumberId?.trim() ||
+    connection?.phoneNumberId ||
+    null;
+
   if (loadingSubscription) {
     return (
       <PageScaffold
@@ -901,34 +933,36 @@ export function ConnectWhatsAppScreen() {
           </View>
         </View>
 
-        {connection ? (
+        {resolvedWabaId || resolvedPhoneNumberId ? (
           <View style={styles.detailsGrid}>
             <View style={styles.detailCard}>
               <Text style={styles.detailLabel}>Business Name</Text>
               <Text style={styles.detailValue}>
-                {connection.displayName || settings.businessName}
+                {resolvedBusinessName}
               </Text>
             </View>
             <View style={styles.detailCard}>
               <Text style={styles.detailLabel}>Phone Number</Text>
               <Text style={styles.detailValue}>
-                {connection.phoneNumber || "Available after backend sync"}
+                {resolvedPhoneNumber || "Available after backend sync"}
               </Text>
             </View>
             <View style={styles.detailCard}>
               <Text style={styles.detailLabel}>WABA ID</Text>
-              <Text style={styles.detailValueMono}>{connection.wabaId}</Text>
+              <Text style={styles.detailValueMono}>
+                {resolvedWabaId || "Available after backend sync"}
+              </Text>
             </View>
             <View style={styles.detailCard}>
               <Text style={styles.detailLabel}>Phone Number ID</Text>
               <Text style={styles.detailValueMono}>
-                {connection.phoneNumberId}
+                {resolvedPhoneNumberId || "Available after backend sync"}
               </Text>
             </View>
           </View>
         ) : null}
 
-        {!connection ? (
+        {!resolvedWabaId && !resolvedPhoneNumberId ? (
           <View style={styles.stepsCard}>
             {[
               "Sign in with Facebook.",

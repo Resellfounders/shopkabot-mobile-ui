@@ -29,6 +29,23 @@ export type UserSettingsResponse = {
   };
 };
 
+export type UserSettingsSubscriptionSnapshotPayload = {
+  provider?: string;
+  providerSubscriptionId?: string;
+  providerPaymentId?: string | null;
+  status?: string;
+  planId?: string;
+  planName?: string;
+  totalCount?: number;
+  gmailId?: string;
+  businessId?: string | null;
+  businessName?: string | null;
+  currentStart?: number | null;
+  currentEnd?: number | null;
+  verifiedAt?: string | null;
+  updatedAt?: string;
+};
+
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.trim().replace(/\/+$/, "");
 }
@@ -90,6 +107,37 @@ export async function getWhatsAppUserSettings({
   if (!response.ok) {
     throw new Error(
       `Unable to load business settings. Status ${response.status}.`,
+    );
+  }
+
+  return response.json() as Promise<UserSettingsResponse>;
+}
+
+export async function saveUserSettingsSubscriptionSnapshot({
+  baseUrl,
+  settingsId,
+  payload,
+}: {
+  baseUrl: string;
+  settingsId: string;
+  payload: UserSettingsSubscriptionSnapshotPayload;
+}): Promise<UserSettingsResponse> {
+  const response = await fetch(
+    `${normalizeBaseUrl(baseUrl)}/settings/user/subscription/snapshot?settingsId=${encodeURIComponent(
+      settingsId,
+    )}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Subscription snapshot sync failed with status ${response.status}`,
     );
   }
 

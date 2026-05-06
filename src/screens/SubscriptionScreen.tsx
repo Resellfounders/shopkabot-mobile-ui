@@ -26,8 +26,10 @@ import {
   getRazorpayConfig,
   openFallbackCheckoutLink,
   openRazorpaySubscriptionCheckout,
+  RazorpaySubscriptionRecord,
   verifyRazorpaySubscription,
 } from "../services/razorpay";
+import { saveUserSettingsSubscriptionSnapshot } from "../services/whatsappConnection";
 import { palette, typography } from "../theme/palette";
 
 type PlanCard = {
@@ -51,6 +53,7 @@ const FRONTEND_APP_SUPPORT_WHATSAPP_LINK =
   encodeURIComponent(
     "Hi, I need help with my ShopKaBot subscription and WhatsApp onboarding.",
   );
+const META_SYNC_BASE_URL = process.env.EXPO_PUBLIC_SETTINGS_API_BASE_URL || "";
 
 const plans: PlanCard[] = [
   {
@@ -147,6 +150,43 @@ export function SubscriptionScreen() {
     hasActiveSubscription &&
     (!settings.businessId.trim() || !settings.whatsappConnection);
 
+  const persistSubscriptionSnapshot = useCallback(
+    async (record: RazorpaySubscriptionRecord | null) => {
+      if (!record || !user?.uid || !META_SYNC_BASE_URL) {
+        return;
+      }
+
+      await saveUserSettingsSubscriptionSnapshot({
+        baseUrl: META_SYNC_BASE_URL,
+        settingsId: user.uid,
+        payload: {
+          provider: record.provider,
+          providerSubscriptionId: record.providerSubscriptionId,
+          providerPaymentId: record.providerPaymentId ?? null,
+          status: record.status,
+          planId: record.planId,
+          planName: record.planName,
+          totalCount: record.totalCount,
+          gmailId: record.gmailId,
+          businessId: record.businessId ?? null,
+          businessName: record.businessName ?? null,
+          currentStart: record.currentStart ?? null,
+          currentEnd: record.currentEnd ?? null,
+          verifiedAt: record.verifiedAt ?? null,
+          updatedAt: record.updatedAt,
+        },
+      });
+    },
+    [user?.uid],
+  );
+
+  const redirectToWhatsAppOnboarding = useCallback(() => {
+    if (settings.businessId.trim() && settings.whatsappConnection) {
+      return;
+    }
+    navigation.navigate("Connect WhatsApp");
+  }, [navigation, settings.businessId, settings.whatsappConnection]);
+
   const pollForSubscriptionSync = useCallback(
     async (subscriptionId?: string) => {
       if (!user?.email) {
@@ -171,6 +211,12 @@ export function SubscriptionScreen() {
             setSubscriptionMessage(
               `${record.planName} is now active in the app.`,
             );
+            try {
+              await persistSubscriptionSnapshot(record);
+            } catch (error) {
+              console.error("Failed to sync subscription snapshot.", error);
+            }
+            redirectToWhatsAppOnboarding();
             return record;
           }
 
@@ -187,7 +233,12 @@ export function SubscriptionScreen() {
         setPollingSubscription(false);
       }
     },
-    [loadCurrentSubscription, user?.email],
+    [
+      loadCurrentSubscription,
+      persistSubscriptionSnapshot,
+      redirectToWhatsAppOnboarding,
+      user?.email,
+    ],
   );
 
   const handlePlanPress = async (plan: PlanCard) => {
@@ -303,7 +354,15 @@ export function SubscriptionScreen() {
         razorpaySubscriptionId: checkoutResponse.razorpay_subscription_id,
         razorpaySignature: checkoutResponse.razorpay_signature,
       });
-      await loadCurrentSubscription({ silent: true });
+      const refreshedSubscription = await loadCurrentSubscription({ silent: true });
+      if (refreshedSubscription) {
+        try {
+          await persistSubscriptionSnapshot(refreshedSubscription);
+        } catch (error) {
+          console.error("Failed to sync subscription snapshot.", error);
+        }
+      }
+      redirectToWhatsAppOnboarding();
 
       Alert.alert(
         "Payment successful",
