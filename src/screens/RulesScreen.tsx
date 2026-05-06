@@ -21,6 +21,7 @@ import { TextField } from "../components/TextField";
 import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { useCurrentSubscription } from "../hooks/useCurrentSubscription";
+import { useUserSettingsBusiness } from "../hooks/useUserSettingsBusiness";
 import {
   createAutoReplyMessage,
   deleteAutoReplyMessage,
@@ -43,6 +44,7 @@ export function RulesScreen() {
   const { settings } = useAppSettings();
   const { hasActiveSubscription, loadingSubscription } =
     useCurrentSubscription();
+  const { resolvedBusinessId, hasConnectedBusiness } = useUserSettingsBusiness();
   const [rules, setRules] = useState<AutoReplyMessage[]>([]);
   const [totalRuleCount, setTotalRuleCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,7 @@ export function RulesScreen() {
           listAutoReplyMessages({
             baseUrl: settings.apiBaseUrl,
             gmailId: user.email,
-            businessId: settings.businessId || undefined,
+            businessId: resolvedBusinessId || undefined,
           }),
           listAutoReplyMessages({
             baseUrl: settings.apiBaseUrl,
@@ -91,7 +93,7 @@ export function RulesScreen() {
         setRefreshing(false);
       }
     },
-    [settings.apiBaseUrl, settings.businessId, user?.email],
+    [resolvedBusinessId, settings.apiBaseUrl, user?.email],
   );
 
   const hasReachedFreeRuleLimit =
@@ -127,7 +129,7 @@ export function RulesScreen() {
 
   const needsBusinessOnboarding =
     hasActiveSubscription &&
-    (!settings.businessId.trim() || !settings.whatsappConnection);
+    !hasConnectedBusiness;
 
   const showRuleLimitLockedState = useCallback(() => {
     const message = `Free plan allows up to ${FREE_RULE_LIMIT} training rules. Subscribe to unlock more rule creation.`;
@@ -422,7 +424,7 @@ export function RulesScreen() {
         editingRule={editingRule}
         initialDraft={initialDraft}
         gmailId={user?.email || ""}
-        businessId={settings.businessId.trim() || null}
+        businessId={resolvedBusinessId || null}
         apiBaseUrl={settings.apiBaseUrl}
         onClose={() => {
           setEditorVisible(false);

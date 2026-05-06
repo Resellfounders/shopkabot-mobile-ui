@@ -43,7 +43,6 @@ export function useCurrentSubscription() {
         const result = await getCurrentRazorpaySubscription({
           baseUrl: settings.apiBaseUrl,
           gmailId: user.email,
-          businessId: settings.businessId || undefined,
         });
         setCurrentSubscription(result);
         return result;
@@ -66,7 +65,7 @@ export function useCurrentSubscription() {
         }
       }
     },
-    [settings.apiBaseUrl, settings.businessId, user?.email],
+    [settings.apiBaseUrl, user?.email],
   );
 
   useFocusEffect(

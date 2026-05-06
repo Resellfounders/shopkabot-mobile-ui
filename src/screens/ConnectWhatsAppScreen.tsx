@@ -172,9 +172,7 @@ export function ConnectWhatsAppScreen() {
   const [connecting, setConnecting] = useState(false);
   const [hostedSignupVisible, setHostedSignupVisible] = useState(false);
   const [nativeSignupVisible, setNativeSignupVisible] = useState(false);
-  const [status, setStatus] = useState<"idle" | "connected" | "error">(
-    settings.whatsappConnection ? "connected" : "idle",
-  );
+  const [status, setStatus] = useState<"idle" | "connected" | "error">("idle");
   const [lastEvent, setLastEvent] = useState<EmbeddedSignupMessage | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [backendBusinessSettings, setBackendBusinessSettings] = useState<
@@ -190,7 +188,6 @@ export function ConnectWhatsAppScreen() {
   }>({});
   const completionStartedRef = useRef(false);
 
-  const connection = settings.whatsappConnection;
   const useHostedSignup = Platform.OS !== "web" && Boolean(HOSTED_WHATSAPP_ONBOARDING_URL);
   const hostedSignupUrl = useMemo(() => {
     if (!HOSTED_WHATSAPP_ONBOARDING_URL || !user?.uid) {
@@ -257,6 +254,19 @@ export function ConnectWhatsAppScreen() {
     [settings, updateSettings],
   );
 
+  const clearStaleLocalConnection = useCallback(async () => {
+    if (!settings.whatsappConnection && !settings.businessId.trim()) {
+      return;
+    }
+
+    await updateSettings({
+      ...settings,
+      botActive: false,
+      businessId: "",
+      whatsappConnection: null,
+    });
+  }, [settings, updateSettings]);
+
   const refreshConnectionFromBackend = useCallback(
     async (options?: { silent?: boolean }) => {
       if (!META_SYNC_BASE_URL || !user?.uid) {
@@ -275,6 +285,14 @@ export function ConnectWhatsAppScreen() {
 
         const businessSettings = userSettings.businessSettings;
         if (!businessSettings?.phoneNumberId || !businessSettings.businessId) {
+          setBackendBusinessSettings(null);
+          await clearStaleLocalConnection();
+          setStatus("idle");
+          if (!options?.silent) {
+            setSyncNote(
+              "No WhatsApp Business is onboarded for this account yet. Please connect again.",
+            );
+          }
           return false;
         }
 
@@ -309,6 +327,7 @@ export function ConnectWhatsAppScreen() {
       }
     },
     [
+      clearStaleLocalConnection,
       persistConnection,
       settings.businessName,
       settings.whatsappConnection?.connectedAt,
@@ -316,12 +335,6 @@ export function ConnectWhatsAppScreen() {
       user,
     ],
   );
-
-  useEffect(() => {
-    if (connection) {
-      setStatus("connected");
-    }
-  }, [connection]);
 
   useEffect(() => {
     if (backendBusinessSettings?.businessId && backendBusinessSettings.phoneNumberId) {
@@ -435,6 +448,7 @@ export function ConnectWhatsAppScreen() {
       phoneNumber?: string;
       alreadySynced?: boolean;
     }) => {
+      let backendSynced = false;
       const nextConnection: WhatsAppBusinessConnection = {
         wabaId,
         phoneNumberId,
@@ -462,6 +476,10 @@ export function ConnectWhatsAppScreen() {
             nextConnection.phoneNumber;
           if (synced.businessSettings) {
             setBackendBusinessSettings(synced.businessSettings);
+            backendSynced = Boolean(
+              synced.businessSettings.businessId?.trim() &&
+                synced.businessSettings.phoneNumberId?.trim(),
+            );
           }
 
           setSyncNote("Business account synced with the backend.");
@@ -473,6 +491,7 @@ export function ConnectWhatsAppScreen() {
           );
         }
       } else if (alreadySynced) {
+        backendSynced = await refreshConnectionFromBackend({ silent: true });
         setSyncNote("Business account synced with the backend.");
       } else {
         setSyncNote(
@@ -518,10 +537,11 @@ export function ConnectWhatsAppScreen() {
       await persistConnection(nextConnection);
       setHostedSignupVisible(false);
       setNativeSignupVisible(false);
-      setStatus("connected");
-
-      if (alreadySynced) {
-        void refreshConnectionFromBackend({ silent: true });
+      setStatus(backendSynced ? "connected" : "idle");
+      if (!backendSynced) {
+        setSyncNote(
+          "WhatsApp details will appear here only after user_settings sync succeeds.",
+        );
       }
     },
     [
@@ -814,22 +834,12 @@ export function ConnectWhatsAppScreen() {
   }, []);
 
   const resolvedBusinessName =
-    backendBusinessSettings?.name?.trim() ||
-    connection?.displayName ||
-    settings.businessName;
+    backendBusinessSettings?.name?.trim() || null;
   const resolvedPhoneNumber =
-    backendBusinessSettings?.fullPhoneNumber?.trim() ||
-    connection?.phoneNumber ||
-    null;
-  const resolvedWabaId =
-    backendBusinessSettings?.businessId?.trim() ||
-    connection?.wabaId ||
-    settings.businessId ||
-    null;
+    backendBusinessSettings?.fullPhoneNumber?.trim() || null;
+  const resolvedWabaId = backendBusinessSettings?.businessId?.trim() || null;
   const resolvedPhoneNumberId =
-    backendBusinessSettings?.phoneNumberId?.trim() ||
-    connection?.phoneNumberId ||
-    null;
+    backendBusinessSettings?.phoneNumberId?.trim() || null;
 
   if (loadingSubscription) {
     return (

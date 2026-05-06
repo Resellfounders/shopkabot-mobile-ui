@@ -16,6 +16,7 @@ import { SectionCard } from "../components/SectionCard";
 import { TextField } from "../components/TextField";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { useCurrentSubscription } from "../hooks/useCurrentSubscription";
+import { useUserSettingsBusiness } from "../hooks/useUserSettingsBusiness";
 import {
   addDisabledNumber,
   getBusinessReplyConfig,
@@ -70,7 +71,9 @@ export function DisableAiReplyScreen() {
   const { settings } = useAppSettings();
   const { hasActiveSubscription, loadingSubscription } =
     useCurrentSubscription();
-  const businessId = settings.businessId.trim();
+  const { resolvedBusinessId, loadingBusinessSettings } =
+    useUserSettingsBusiness();
+  const businessId = resolvedBusinessId || "";
 
   const [config, setConfig] = useState<BusinessReplyConfig | null>(null);
   const [phone, setPhone] = useState("");
@@ -218,6 +221,19 @@ export function DisableAiReplyScreen() {
           <View style={styles.lockedState}>
             <ActivityIndicator size="small" color={palette.primaryGreen} />
             <Text style={styles.lockedCopy}>Loading plan status...</Text>
+          </View>
+        </SectionCard>
+      </PageScaffold>
+    );
+  }
+
+  if (loadingBusinessSettings) {
+    return (
+      <PageScaffold title="Smart Reply Settings" subtitle="Loading workspace.">
+        <SectionCard title="Loading">
+          <View style={styles.lockedState}>
+            <ActivityIndicator size="small" color={palette.primaryGreen} />
+            <Text style={styles.lockedCopy}>Loading business connection...</Text>
           </View>
         </SectionCard>
       </PageScaffold>
