@@ -43,13 +43,9 @@ export function useUserSettingsBusiness() {
       setBusinessSettingsError(null);
 
       try {
-        const authToken = user.getIdToken
-          ? `Bearer ${await user.getIdToken()}`
-          : undefined;
         const userSettings = await getWhatsAppUserSettings({
           baseUrl: USER_SETTINGS_BASE_URL,
           settingsId: user.uid,
-          authToken,
         });
 
         const resolved = userSettings.businessSettings || null;
@@ -95,4 +91,3 @@ export function useUserSettingsBusiness() {
     hasConnectedBusiness: Boolean(resolvedBusinessId),
   };
 }
-

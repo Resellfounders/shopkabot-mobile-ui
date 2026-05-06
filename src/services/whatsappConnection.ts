@@ -1,3 +1,5 @@
+import { auth } from "./firebase";
+
 type SetupBusinessAccountParams = {
   baseUrl: string;
   settingsId: string;
@@ -5,6 +7,7 @@ type SetupBusinessAccountParams = {
   phoneNumberId: string;
   eventType: string;
   replyFlowType?: string;
+  authToken?: string | null;
 };
 
 export type SetupBusinessAccountResponse = {
@@ -50,6 +53,37 @@ function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.trim().replace(/\/+$/, "");
 }
 
+async function getBearerToken(): Promise<string | null> {
+  try {
+    if (!auth?.currentUser) {
+      return null;
+    }
+    const token = await auth.currentUser.getIdToken();
+    return token ? `Bearer ${token}` : null;
+  } catch {
+    return null;
+  }
+}
+
+async function buildAuthHeaders(
+  existingHeaders?: Record<string, string>,
+  authToken?: string | null,
+): Promise<Record<string, string> | undefined> {
+  const token = authToken || (await getBearerToken());
+  if (!token && !existingHeaders) {
+    return undefined;
+  }
+
+  return {
+    ...(existingHeaders || {}),
+    ...(token
+      ? {
+          Authorization: token,
+        }
+      : {}),
+  };
+}
+
 export async function setupWhatsAppBusinessAccount({
   baseUrl,
   settingsId,
@@ -57,6 +91,7 @@ export async function setupWhatsAppBusinessAccount({
   phoneNumberId,
   eventType,
   replyFlowType,
+  authToken,
 }: SetupBusinessAccountParams): Promise<SetupBusinessAccountResponse> {
   const searchParams = new URLSearchParams({
     settingsId,
@@ -72,6 +107,7 @@ export async function setupWhatsAppBusinessAccount({
     `${normalizeBaseUrl(baseUrl)}/settings/user/setup/business-account?${searchParams.toString()}`,
     {
       method: "PATCH",
+      headers: await buildAuthHeaders(undefined, authToken),
     },
   );
 
@@ -96,11 +132,7 @@ export async function getWhatsAppUserSettings({
   const response = await fetch(
     `${normalizeBaseUrl(baseUrl)}/settings/user/${encodeURIComponent(settingsId)}`,
     {
-      headers: authToken
-        ? {
-            Authorization: authToken,
-          }
-        : undefined,
+      headers: await buildAuthHeaders(undefined, authToken),
     },
   );
 
@@ -117,10 +149,12 @@ export async function saveUserSettingsSubscriptionSnapshot({
   baseUrl,
   settingsId,
   payload,
+  authToken,
 }: {
   baseUrl: string;
   settingsId: string;
   payload: UserSettingsSubscriptionSnapshotPayload;
+  authToken?: string | null;
 }): Promise<UserSettingsResponse> {
   const response = await fetch(
     `${normalizeBaseUrl(baseUrl)}/settings/user/subscription/snapshot?settingsId=${encodeURIComponent(
@@ -128,9 +162,12 @@ export async function saveUserSettingsSubscriptionSnapshot({
     )}`,
     {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: await buildAuthHeaders(
+        {
+          "Content-Type": "application/json",
+        },
+        authToken,
+      ),
       body: JSON.stringify(payload),
     },
   );

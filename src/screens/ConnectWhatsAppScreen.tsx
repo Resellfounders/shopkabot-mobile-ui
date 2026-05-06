@@ -74,7 +74,8 @@ type FacebookLoginResponse = {
 
 const META_APP_ID = process.env.EXPO_PUBLIC_META_APP_ID;
 const META_CONFIG_ID = process.env.EXPO_PUBLIC_META_CONFIG_ID;
-const META_SYNC_BASE_URL = process.env.EXPO_PUBLIC_SETTINGS_API_BASE_URL;
+const SETTINGS_SYNC_BASE_URL =
+  process.env.EXPO_PUBLIC_SETTINGS_API_BASE_URL;
 const HOSTED_WHATSAPP_ONBOARDING_URL =
   process.env.EXPO_PUBLIC_WHATSAPP_ONBOARDING_URL;
 const FB_SDK_ID = "facebook-jssdk";
@@ -189,6 +190,13 @@ export function ConnectWhatsAppScreen() {
   const completionStartedRef = useRef(false);
 
   const useHostedSignup = Platform.OS !== "web" && Boolean(HOSTED_WHATSAPP_ONBOARDING_URL);
+  const userSettingsSyncBaseUrl = useMemo(
+    () =>
+      SETTINGS_SYNC_BASE_URL?.trim() ||
+      settings.apiBaseUrl?.trim() ||
+      "",
+    [settings.apiBaseUrl],
+  );
   const hostedSignupUrl = useMemo(() => {
     if (!HOSTED_WHATSAPP_ONBOARDING_URL || !user?.uid) {
       return null;
@@ -196,11 +204,11 @@ export function ConnectWhatsAppScreen() {
 
     return buildHostedOnboardingUrl(HOSTED_WHATSAPP_ONBOARDING_URL, {
       settingsId: user.uid,
-      syncBaseUrl: META_SYNC_BASE_URL,
+      syncBaseUrl: userSettingsSyncBaseUrl,
       source: "shopkabot-mobile-app",
       replyFlowType: REPLY_FLOW_TYPE,
     });
-  }, [user?.uid]);
+  }, [user?.uid, userSettingsSyncBaseUrl]);
 
   const initializeFacebookSdk = useCallback(() => {
     if (Platform.OS !== "web") {
@@ -269,18 +277,14 @@ export function ConnectWhatsAppScreen() {
 
   const refreshConnectionFromBackend = useCallback(
     async (options?: { silent?: boolean }) => {
-      if (!META_SYNC_BASE_URL || !user?.uid) {
+      if (!userSettingsSyncBaseUrl || !user?.uid) {
         return false;
       }
 
       try {
-        const authToken = user.getIdToken
-          ? `Bearer ${await user.getIdToken()}`
-          : undefined;
         const userSettings = await getWhatsAppUserSettings({
-          baseUrl: META_SYNC_BASE_URL,
+          baseUrl: userSettingsSyncBaseUrl,
           settingsId: user.uid,
-          authToken,
         });
 
         const businessSettings = userSettings.businessSettings;
@@ -333,6 +337,7 @@ export function ConnectWhatsAppScreen() {
       settings.whatsappConnection?.connectedAt,
       settings.whatsappConnection?.eventType,
       user,
+      userSettingsSyncBaseUrl,
     ],
   );
 
@@ -458,10 +463,10 @@ export function ConnectWhatsAppScreen() {
         connectedAt: new Date().toISOString(),
       };
 
-      if (!alreadySynced && META_SYNC_BASE_URL && user?.uid) {
+      if (!alreadySynced && userSettingsSyncBaseUrl && user?.uid) {
         try {
           const synced = await setupWhatsAppBusinessAccount({
-            baseUrl: META_SYNC_BASE_URL,
+            baseUrl: userSettingsSyncBaseUrl,
             settingsId: user.uid,
             wabaId,
             phoneNumberId,
@@ -495,7 +500,7 @@ export function ConnectWhatsAppScreen() {
         setSyncNote("Business account synced with the backend.");
       } else {
         setSyncNote(
-          "Connected in ShopKaBot. Add EXPO_PUBLIC_SETTINGS_API_BASE_URL later if you also want backend sync.",
+          "Connected in ShopKaBot. Add API base URL config if you also want backend sync.",
         );
       }
 
@@ -551,6 +556,7 @@ export function ConnectWhatsAppScreen() {
       settings.businessName,
       user?.email,
       user?.uid,
+      userSettingsSyncBaseUrl,
     ],
   );
 
