@@ -36,6 +36,45 @@ import {
 import { palette, typography } from "../theme/palette";
 
 const FREE_RULE_LIMIT = 5;
+const DUPLICATE_RULE_ERROR = "DUPLICATE_RULE";
+
+function normalizeComparisonText(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function hasDuplicateTrainingPair(
+  existingRules: AutoReplyMessage[],
+  payload: AutoReplyMessagePayload,
+  editingId?: string,
+) {
+  const incomingMessages = new Set(
+    payload.incomingMessage.map(normalizeComparisonText).filter(Boolean),
+  );
+  const replyMessages = new Set(
+    payload.replyMessage.map(normalizeComparisonText).filter(Boolean),
+  );
+
+  if (!incomingMessages.size || !replyMessages.size) {
+    return false;
+  }
+
+  return existingRules.some((rule) => {
+    if (editingId && rule.id === editingId) {
+      return false;
+    }
+
+    const hasMatchingIncoming = rule.incomingMessage.some((message) =>
+      incomingMessages.has(normalizeComparisonText(message)),
+    );
+    if (!hasMatchingIncoming) {
+      return false;
+    }
+
+    return rule.replyMessage.some((message) =>
+      replyMessages.has(normalizeComparisonText(message)),
+    );
+  });
+}
 
 export function RulesScreen() {
   const navigation = useNavigation<any>();
@@ -184,6 +223,14 @@ export function RulesScreen() {
       );
     }
 
+    if (hasDuplicateTrainingPair(rules, payload, editingId)) {
+      Alert.alert(
+        "Already present",
+        "This input message and reply message are already saved in training.",
+      );
+      throw new Error(DUPLICATE_RULE_ERROR);
+    }
+
     try {
       if (editingId) {
         await updateAutoReplyMessage({
@@ -201,6 +248,13 @@ export function RulesScreen() {
       setEditingRule(null);
       await fetchRules();
     } catch (saveError) {
+      if (
+        saveError instanceof Error &&
+        saveError.message === DUPLICATE_RULE_ERROR
+      ) {
+        throw saveError;
+      }
+
       Alert.alert(
         "Unable to save rule",
         saveError instanceof Error ? saveError.message : "Please try again.",
