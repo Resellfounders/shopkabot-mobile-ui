@@ -23,7 +23,7 @@ import { ChatHistoryMessage, TrainingDraft } from "../types/autoReply";
 import { palette, typography } from "../theme/palette";
 
 const CHAT_HISTORY_BASE_URL =
-  process.env.EXPO_PUBLIC_SETTINGS_API_BASE_URL || "";
+  process.env.EXPO_PUBLIC_API_BASE_URL || "";
 
 function normalizeRole(role: string | null | undefined) {
   return (role || "").toLowerCase();
@@ -85,7 +85,7 @@ export function ReplyHistoryScreen() {
     async (isRefresh = false) => {
       if (!CHAT_HISTORY_BASE_URL) {
         setError(
-          "Set EXPO_PUBLIC_SETTINGS_API_BASE_URL to load auto-reply history.",
+          "Set EXPO_PUBLIC_API_BASE_URL to load auto-reply history.",
         );
         setLoading(false);
         setRefreshing(false);
@@ -141,7 +141,7 @@ export function ReplyHistoryScreen() {
       if (!CHAT_HISTORY_BASE_URL) {
         Alert.alert(
           "Reply history unavailable",
-          "Set EXPO_PUBLIC_SETTINGS_API_BASE_URL first.",
+          "Set EXPO_PUBLIC_API_BASE_URL first.",
         );
         return;
       }
