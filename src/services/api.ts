@@ -8,22 +8,59 @@ import {
   ChatHistoryMessage,
   OutputLanguage,
 } from "../types/autoReply";
+import { auth } from "./firebase";
 
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.trim().replace(/\/+$/, "");
+}
+
+function buildUrl(baseUrl: string, path: string) {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const normalizedPath =
+    normalizedBaseUrl.endsWith("/api/v1") && path.startsWith("/api/v1/")
+      ? path.slice("/api/v1".length)
+      : path;
+  return `${normalizedBaseUrl}${normalizedPath}`;
+}
+
+async function getBearerToken(): Promise<string | null> {
+  try {
+    if (!auth?.currentUser) {
+      return null;
+    }
+
+    const token = await auth.currentUser.getIdToken();
+    return token ? `Bearer ${token}` : null;
+  } catch {
+    return null;
+  }
 }
 
 async function request<T>(
   baseUrl: string,
   path: string,
   options?: RequestInit,
+  requestOptions?: {
+    requiresAuth?: boolean;
+  },
 ): Promise<T> {
   const isFormDataBody =
     typeof FormData !== "undefined" && options?.body instanceof FormData;
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
+  const existingHeaders = (options?.headers || {}) as Record<string, string>;
+  const authHeaders =
+    requestOptions?.requiresAuth && !existingHeaders.Authorization
+      ? await getBearerToken()
+      : null;
+
+  const response = await fetch(buildUrl(baseUrl, path), {
     headers: {
       ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
-      ...(options?.headers || {}),
+      ...(authHeaders
+        ? {
+            Authorization: authHeaders,
+          }
+        : {}),
+      ...existingHeaders,
     },
     ...options,
   });
@@ -211,6 +248,8 @@ export async function listChatConversationSummaries(params: {
   return request<ChatHistoryMessage[]>(
     params.baseUrl,
     `/api/v1/chat/${encodeURIComponent(params.businessPhoneNumber)}/conversations`,
+    undefined,
+    { requiresAuth: true },
   );
 }
 
@@ -228,6 +267,8 @@ export async function getChatConversationMessages(params: {
     `/api/v1/chat/conversation/${encodeURIComponent(
       params.businessPhoneNumber,
     )}?${searchParams.toString()}`,
+    undefined,
+    { requiresAuth: true },
   );
 }
 
