@@ -64,6 +64,25 @@ function buildTrainingDraft(
     }
   }
 
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const current = messages[index];
+    if (normalizeRole(current.role) !== "user") {
+      continue;
+    }
+
+    const incoming = current.content?.trim();
+    if (!incoming) {
+      continue;
+    }
+
+    return {
+      incomingMessage: [incoming],
+      replyMessage: [""],
+      rule: "smart_intent",
+      sourceLabel: `Reply history from ${customerPhoneNumber}`,
+    };
+  }
+
   return null;
 }
 
@@ -165,8 +184,8 @@ export function ReplyHistoryScreen() {
         const draft = buildTrainingDraft(messages, summary.fromPhoneNumber);
         if (!draft) {
           Alert.alert(
-            "No training pair found",
-            "This conversation does not yet have a customer message followed by a bot reply that can be turned into training.",
+            "No usable message found",
+            "This conversation does not contain a customer message that can be used for training yet.",
           );
           return;
         }
