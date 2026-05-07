@@ -62,6 +62,7 @@ export type AutoReplyMessageTestPayload = {
   settings?: {
     contextualReplyEnabled: boolean;
     outputLanguage: OutputLanguage;
+    replyAim?: string;
   } | null;
 };
 
@@ -78,6 +79,7 @@ export type AutoReplyMessageTestResult = {
   evaluatedRules: number;
   contextualReplyEnabled: boolean;
   outputLanguage: OutputLanguage;
+  replyAim?: string;
 };
 
 export type BusinessReplyConfig = {
@@ -86,6 +88,7 @@ export type BusinessReplyConfig = {
   autoReplyEnabled?: boolean;
   contextualReplyEnabled: boolean;
   outputLanguage: OutputLanguage;
+  replyAim: string;
 };
 
 export type ChatHistoryMessage = {
@@ -97,6 +100,8 @@ export type ChatHistoryMessage = {
   toPhoneNumber: string;
   read: boolean;
   createdOn?: string;
+  matched?: boolean;
+  matchType?: string | null;
 };
 
 export type TrainingDraft = {

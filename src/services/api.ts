@@ -199,6 +199,7 @@ export async function updateBusinessReplyConfig(params: {
     autoReplyEnabled?: boolean;
     contextualReplyEnabled?: boolean;
     outputLanguage?: OutputLanguage;
+    replyAim?: string;
   };
 }) {
   return request<BusinessReplyConfig & { status: string }>(
@@ -243,19 +244,17 @@ export async function removeDisabledNumber(params: {
 
 export async function listChatConversationSummaries(params: {
   baseUrl: string;
-  businessPhoneNumber: string;
+  businessId: string;
 }) {
   return request<ChatHistoryMessage[]>(
     params.baseUrl,
-    `/api/v1/chat/${encodeURIComponent(params.businessPhoneNumber)}/conversations`,
-    undefined,
-    { requiresAuth: true },
+    `/admin/auto-reply-history/${encodeURIComponent(params.businessId)}/conversations`,
   );
 }
 
 export async function getChatConversationMessages(params: {
   baseUrl: string;
-  businessPhoneNumber: string;
+  businessId: string;
   customerPhoneNumber: string;
 }) {
   const searchParams = new URLSearchParams({
@@ -264,11 +263,9 @@ export async function getChatConversationMessages(params: {
 
   return request<ChatHistoryMessage[]>(
     params.baseUrl,
-    `/api/v1/chat/conversation/${encodeURIComponent(
-      params.businessPhoneNumber,
-    )}?${searchParams.toString()}`,
-    undefined,
-    { requiresAuth: true },
+    `/admin/auto-reply-history/${encodeURIComponent(
+      params.businessId,
+    )}/messages?${searchParams.toString()}`,
   );
 }
 

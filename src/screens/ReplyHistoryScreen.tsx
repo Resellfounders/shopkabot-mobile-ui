@@ -14,13 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { PageScaffold } from "../components/PageScaffold";
 import { SectionCard } from "../components/SectionCard";
-import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import {
   getChatConversationMessages,
   listChatConversationSummaries,
 } from "../services/api";
-import { getWhatsAppUserSettings } from "../services/whatsappConnection";
 import { ChatHistoryMessage, TrainingDraft } from "../types/autoReply";
 import { palette, typography } from "../theme/palette";
 
@@ -71,15 +69,12 @@ function buildTrainingDraft(
 
 export function ReplyHistoryScreen() {
   const navigation = useNavigation<any>();
-  const { user } = useAuth();
   const { settings } = useAppSettings();
   const [history, setHistory] = useState<ChatHistoryMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trainingCustomer, setTrainingCustomer] = useState<string | null>(null);
-  const [resolvedBusinessPhoneNumber, setResolvedBusinessPhoneNumber] =
-    useState<string | null>(null);
 
   const businessId = useMemo(
     () => settings.businessId.trim() || null,
@@ -90,7 +85,7 @@ export function ReplyHistoryScreen() {
     async (isRefresh = false) => {
       if (!CHAT_HISTORY_BASE_URL) {
         setError(
-          "Set EXPO_PUBLIC_SETTINGS_API_BASE_URL to load reply history from chat_messages.",
+          "Set EXPO_PUBLIC_SETTINGS_API_BASE_URL to load auto-reply history.",
         );
         setLoading(false);
         setRefreshing(false);
@@ -99,9 +94,8 @@ export function ReplyHistoryScreen() {
 
       if (!businessId) {
         setHistory([]);
-        setResolvedBusinessPhoneNumber(null);
         setError(
-          "Reply history is only available whatsapp is connected and we can use the replies to retrain the model.",
+          "Connect WhatsApp Business first so auto-reply history can be linked to a businessId.",
         );
         setLoading(false);
         setRefreshing(false);
@@ -117,42 +111,9 @@ export function ReplyHistoryScreen() {
       setError(null);
 
       try {
-        let resolvedBusinessPhone =
-          settings.whatsappConnection?.phoneNumber?.trim() || null;
-
-        if (!resolvedBusinessPhone && user?.uid) {
-          const userSettings = await getWhatsAppUserSettings({
-            baseUrl: CHAT_HISTORY_BASE_URL,
-            settingsId: user.uid,
-          });
-          const onboardedBusinessId =
-            userSettings.businessSettings?.businessId?.trim() || null;
-          if (onboardedBusinessId !== businessId) {
-            setHistory([]);
-            setResolvedBusinessPhoneNumber(null);
-            setError(
-              "The onboarded WhatsApp business does not match the current businessId. Please reconnect WhatsApp Business.",
-            );
-            return;
-          }
-
-          resolvedBusinessPhone =
-            userSettings.businessSettings?.fullPhoneNumber?.trim() || null;
-        }
-
-        if (!resolvedBusinessPhone) {
-          setHistory([]);
-          setResolvedBusinessPhoneNumber(null);
-          setError(
-            "Complete WhatsApp Business onboarding first so reply history can be loaded for this businessId.",
-          );
-          return;
-        }
-
-        setResolvedBusinessPhoneNumber(resolvedBusinessPhone);
         const result = await listChatConversationSummaries({
           baseUrl: CHAT_HISTORY_BASE_URL,
-          businessPhoneNumber: resolvedBusinessPhone,
+          businessId,
         });
         setHistory(result);
       } catch (loadError) {
@@ -166,7 +127,7 @@ export function ReplyHistoryScreen() {
         setRefreshing(false);
       }
     },
-    [businessId, settings.whatsappConnection?.phoneNumber, user?.uid],
+    [businessId],
   );
 
   useFocusEffect(
@@ -188,17 +149,7 @@ export function ReplyHistoryScreen() {
       if (!businessId) {
         Alert.alert(
           "WhatsApp Business required",
-          "Onboard WhatsApp Business first so reply history is linked to a businessId.",
-        );
-        return;
-      }
-
-      const businessPhone = resolvedBusinessPhoneNumber;
-
-      if (!businessPhone) {
-        Alert.alert(
-          "Business phone unavailable",
-          "Complete WhatsApp Business onboarding and sync the phone number first.",
+          "Onboard WhatsApp Business first so auto-reply history is linked to a businessId.",
         );
         return;
       }
@@ -207,7 +158,7 @@ export function ReplyHistoryScreen() {
       try {
         const messages = await getChatConversationMessages({
           baseUrl: CHAT_HISTORY_BASE_URL,
-          businessPhoneNumber: businessPhone,
+          businessId,
           customerPhoneNumber: summary.fromPhoneNumber,
         });
 
@@ -234,7 +185,7 @@ export function ReplyHistoryScreen() {
         setTrainingCustomer(null);
       }
     },
-    [businessId, navigation, resolvedBusinessPhoneNumber],
+    [businessId, navigation],
   );
 
   return (
@@ -246,7 +197,7 @@ export function ReplyHistoryScreen() {
         {loading ? (
           <View style={styles.centerState}>
             <ActivityIndicator color={palette.primaryGreen} />
-            <Text style={styles.helperText}>Loading chat history...</Text>
+            <Text style={styles.helperText}>Loading auto-reply history...</Text>
           </View>
         ) : error ? (
           <View style={styles.noticeCard}>
@@ -333,8 +284,8 @@ export function ReplyHistoryScreen() {
                 />
                 <Text style={styles.emptyTitle}>Nothing to show yet</Text>
                 <Text style={styles.emptyText}>
-                  Once customer chats are stored in chat_messages, they will
-                  appear here.
+                  Once auto-reply attempts are stored, they will appear here for
+                  training.
                 </Text>
               </View>
             )}

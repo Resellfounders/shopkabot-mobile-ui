@@ -5,6 +5,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Alert,
+  Image,
   Linking,
   Platform,
   Pressable,
@@ -34,6 +35,7 @@ const salesUrl =
   process.env.EXPO_PUBLIC_CONTACT_BOOKING_URL ||
   process.env.EXPO_PUBLIC_CONTACT_WHATSAPP_URL ||
   "";
+const brandLogo = require("../../assets/icon.png");
 
 export function AppDrawerContent({
   state,
@@ -113,7 +115,11 @@ export function AppDrawerContent({
           style={styles.brandCard}
         >
           <View style={styles.logo}>
-            <Text style={styles.logoText}>S</Text>
+            <Image
+              source={brandLogo}
+              style={styles.logoImage}
+              resizeMode="cover"
+            />
           </View>
           <View style={styles.brandCopy}>
             <Text style={styles.brandTitle}>ShopKaBot</Text>
@@ -213,14 +219,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: palette.primaryGreen,
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: "hidden",
+    backgroundColor: "#FFFFFF",
   },
-  logoText: {
-    color: palette.textDark,
-    fontFamily: typography.extrabold,
-    fontSize: 20,
+  logoImage: {
+    width: "100%",
+    height: "100%",
   },
   brandCopy: {
     gap: 4,
