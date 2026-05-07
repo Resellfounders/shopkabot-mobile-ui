@@ -263,7 +263,7 @@ export function TestTheBotScreen() {
             ) : (
               <Text style={styles.identityValue}>
                 {replyConfig
-                  ? `${replyConfig.contextualReplyEnabled ? "Contextual on" : "Contextual off"} - ${replyConfig.outputLanguage.replace(/_/g, " ")}`
+                  ? `${replyConfig.contextualReplyEnabled ? "Contextual on" : "Contextual off"} - ${replyConfig.outputLanguage.replace(/_/g, " ")}${replyConfig.replyAim ? ` - Aim: ${replyConfig.replyAim}` : ""}`
                   : "Using default settings"}
               </Text>
             )}

@@ -30,6 +30,19 @@ function normalizePhone(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function normalizeWordLimitedText(value: string, maxWords: number) {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) {
+    return value;
+  }
+
+  return words.slice(0, maxWords).join(" ");
+}
+
+function countWords(value: string) {
+  return value.trim().split(/\s+/).filter(Boolean).length;
+}
+
 function showMessage(title: string, message: string) {
   if (Platform.OS === "web") {
     globalThis.alert?.(`${title}\n\n${message}`);
@@ -67,6 +80,7 @@ const outputLanguageOptions: Array<{
 ];
 
 export function DisableAiReplyScreen() {
+  const replyAimWordLimit = 100;
   const navigation = useNavigation<any>();
   const { settings } = useAppSettings();
   const { hasActiveSubscription, loadingSubscription } =
@@ -85,12 +99,15 @@ export function DisableAiReplyScreen() {
   const [contextualReplyEnabled, setContextualReplyEnabled] = useState(true);
   const [outputLanguage, setOutputLanguage] =
     useState<OutputLanguage>("same_as_user");
+  const [replyAim, setReplyAim] = useState("");
+  const replyAimWordCount = countWords(replyAim);
 
   const loadConfig = async () => {
     if (!businessId) {
       setConfig(null);
       setContextualReplyEnabled(true);
       setOutputLanguage("same_as_user");
+      setReplyAim("");
       setPageLoading(false);
       return;
     }
@@ -104,6 +121,7 @@ export function DisableAiReplyScreen() {
       setConfig(nextConfig);
       setContextualReplyEnabled(nextConfig.contextualReplyEnabled);
       setOutputLanguage(nextConfig.outputLanguage);
+      setReplyAim(nextConfig.replyAim || "");
     } catch (error) {
       const message =
         error instanceof Error
@@ -142,6 +160,7 @@ export function DisableAiReplyScreen() {
         payload: {
           contextualReplyEnabled,
           outputLanguage,
+          replyAim,
         },
       });
       await loadConfig();
@@ -369,6 +388,17 @@ export function DisableAiReplyScreen() {
             );
           })}
         </View>
+
+        <TextField
+          label="Reply aim"
+          placeholder="Example: qualify leads, answer clearly, and move serious buyers toward booking a call."
+          value={replyAim}
+          onChangeText={(value) =>
+            setReplyAim(normalizeWordLimitedText(value, replyAimWordLimit))
+          }
+          multiline
+          helper={`This business goal is included in the smart reply prompt after a rule match. ${replyAimWordCount}/${replyAimWordLimit} words used.`}
+        />
 
         <Pressable
           onPress={() => {
