@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -92,6 +93,7 @@ const benefits = [
   "Best for shops, studios, service businesses, and online sellers",
   "Deploy quickly with simple Google sign in and guided setup",
 ];
+const brandLogo = require("../../assets/icon.png");
 
 export function LoginScreen() {
   const { width } = useWindowDimensions();
@@ -256,6 +258,11 @@ export function LoginScreen() {
         <View style={styles.container}>
           <View style={[styles.navbar, isTablet && styles.navbarDesktop]}>
             <View style={styles.brandBlock}>
+              <Image
+                source={brandLogo}
+                style={styles.brandLogo}
+                resizeMode="contain"
+              />
               <Text style={styles.brandName}>ShopKaBot</Text>
               <Text style={styles.brandTag}>Your Personal AI Agent</Text>
             </View>
@@ -344,7 +351,11 @@ export function LoginScreen() {
                   style={styles.chatHeader}
                 >
                   <View style={styles.chatAvatar}>
-                    <Text style={styles.chatAvatarText}>S</Text>
+                    <Image
+                      source={brandLogo}
+                      style={styles.chatAvatarImage}
+                      resizeMode="cover"
+                    />
                   </View>
 
                   <View style={styles.chatHeaderTextBlock}>
@@ -724,6 +735,11 @@ const styles = StyleSheet.create({
   brandBlock: {
     gap: 2,
   },
+  brandLogo: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+  },
   brandName: {
     color: "#FFFFFF",
     fontFamily: typography.extrabold,
@@ -897,13 +913,11 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: "hidden",
   },
-  chatAvatarText: {
-    color: "#075E54",
-    fontFamily: typography.extrabold,
-    fontSize: 20,
+  chatAvatarImage: {
+    width: "100%",
+    height: "100%",
   },
   chatHeaderTextBlock: {
     flex: 1,
