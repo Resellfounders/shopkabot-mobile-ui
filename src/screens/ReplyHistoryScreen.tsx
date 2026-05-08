@@ -15,75 +15,39 @@ import { Ionicons } from "@expo/vector-icons";
 import { PageScaffold } from "../components/PageScaffold";
 import { SectionCard } from "../components/SectionCard";
 import { useAppSettings } from "../context/AppSettingsContext";
-import {
-  getChatConversationMessages,
-  listChatConversationSummaries,
-} from "../services/api";
+import { listChatConversationSummaries } from "../services/api";
 import { ChatHistoryMessage, TrainingDraft } from "../types/autoReply";
 import { palette, typography } from "../theme/palette";
 
 const CHAT_HISTORY_BASE_URL =
   process.env.EXPO_PUBLIC_API_BASE_URL || "";
 
-function normalizeRole(role: string | null | undefined) {
-  return (role || "").toLowerCase();
-}
+type ReplyHistoryFilter = "all" | "replied" | "not_replied";
+
+const FILTER_OPTIONS: Array<{
+  value: ReplyHistoryFilter;
+  label: string;
+}> = [
+  { value: "all", label: "All" },
+  { value: "replied", label: "AI Replied" },
+  { value: "not_replied", label: "Not Replied" },
+];
 
 function buildTrainingDraft(
-  messages: ChatHistoryMessage[],
-  customerPhoneNumber: string,
+  summary: ChatHistoryMessage,
 ): TrainingDraft | null {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const current = messages[index];
-    if (normalizeRole(current.role) !== "assistant") {
-      continue;
-    }
-
-    for (
-      let previousIndex = index - 1;
-      previousIndex >= 0;
-      previousIndex -= 1
-    ) {
-      const previous = messages[previousIndex];
-      if (normalizeRole(previous.role) !== "user") {
-        continue;
-      }
-
-      const incoming = previous.content?.trim();
-      const reply = current.content?.trim();
-      if (!incoming || !reply) {
-        continue;
-      }
-
-      return {
-        incomingMessage: [incoming],
-        replyMessage: [reply],
-        rule: "smart_intent_match",
-        sourceLabel: `Reply history from ${customerPhoneNumber}`,
-      };
-    }
+  const incoming = summary.content?.trim();
+  if (!incoming) {
+    return null;
   }
 
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const current = messages[index];
-    if (normalizeRole(current.role) !== "user") {
-      continue;
-    }
-
-    const incoming = current.content?.trim();
-    if (!incoming) {
-      continue;
-    }
-
-    return {
-      incomingMessage: [incoming],
-      replyMessage: [""],
-      rule: "smart_intent",
-      sourceLabel: `Reply history from ${customerPhoneNumber}`,
-    };
-  }
-
-  return null;
+  const reply = summary.replyContent?.trim() || "";
+  return {
+    incomingMessage: [incoming],
+    replyMessage: [reply],
+    rule: reply ? "smart_intent_match" : "smart_intent",
+    sourceLabel: `Reply history from ${summary.fromPhoneNumber}`,
+  };
 }
 
 export function ReplyHistoryScreen() {
@@ -93,12 +57,26 @@ export function ReplyHistoryScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [trainingCustomer, setTrainingCustomer] = useState<string | null>(null);
+  const [trainingHistoryId, setTrainingHistoryId] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<ReplyHistoryFilter>("all");
 
   const businessId = useMemo(
     () => settings.businessId.trim() || null,
     [settings.businessId],
   );
+
+  const filteredHistory = useMemo(() => {
+    return history.filter((item) => {
+      const hasReply = Boolean(item.replyContent?.trim());
+      if (activeFilter === "replied") {
+        return hasReply;
+      }
+      if (activeFilter === "not_replied") {
+        return !hasReply;
+      }
+      return true;
+    });
+  }, [activeFilter, history]);
 
   const loadHistory = useCallback(
     async (isRefresh = false) => {
@@ -173,25 +151,20 @@ export function ReplyHistoryScreen() {
         return;
       }
 
-      setTrainingCustomer(summary.fromPhoneNumber);
+      setTrainingHistoryId(summary.id);
       try {
-        const messages = await getChatConversationMessages({
-          baseUrl: CHAT_HISTORY_BASE_URL,
-          businessId,
-          customerPhoneNumber: summary.fromPhoneNumber,
-        });
-
-        const draft = buildTrainingDraft(messages, summary.fromPhoneNumber);
+        const draft = buildTrainingDraft(summary);
         if (!draft) {
           Alert.alert(
             "No usable message found",
-            "This conversation does not contain a customer message that can be used for training yet.",
+            "This history row does not contain a customer message that can be used for training yet.",
           );
           return;
         }
 
         navigation.navigate("Rules", {
           prefillTraining: draft,
+          openedFromHistory: true,
         });
       } catch (trainError) {
         Alert.alert(
@@ -201,7 +174,7 @@ export function ReplyHistoryScreen() {
             : "Please try again.",
         );
       } finally {
-        setTrainingCustomer(null);
+        setTrainingHistoryId(null);
       }
     },
     [businessId, navigation],
@@ -213,6 +186,31 @@ export function ReplyHistoryScreen() {
       subtitle="Use past conversations to create new training examples."
     >
       <SectionCard title="Conversation History">
+        <View style={styles.filterBar}>
+          {FILTER_OPTIONS.map((option) => {
+            const isActive = activeFilter === option.value;
+            return (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.filterChip,
+                  isActive && styles.filterChipActive,
+                ]}
+                onPress={() => setActiveFilter(option.value)}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isActive && styles.filterChipTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {loading ? (
           <View style={styles.centerState}>
             <ActivityIndicator color={palette.primaryGreen} />
@@ -239,9 +237,9 @@ export function ReplyHistoryScreen() {
               />
             }
           >
-            {history.length ? (
-              history.map((item) => {
-                const isPreparing = trainingCustomer === item.fromPhoneNumber;
+            {filteredHistory.length ? (
+              filteredHistory.map((item) => {
+                const isPreparing = trainingHistoryId === item.id;
                 return (
                   <Pressable
                     key={item.id}
@@ -287,9 +285,16 @@ export function ReplyHistoryScreen() {
                       {item.content?.trim() || "No preview available"}
                     </Text>
 
+                    <View style={styles.replyBlock}>
+                      <Text style={styles.replyLabel}>Reply</Text>
+                      <Text style={styles.replyPreview} numberOfLines={3}>
+                        {item.replyContent?.trim() ||
+                          "No AI reply was sent for this message yet."}
+                      </Text>
+                    </View>
+
                     <Text style={styles.historyHint}>
-                      Tap to pull the latest customer + bot exchange into Train
-                      The Bot.
+                      Tap to pull this exact history row into Train The Bot.
                     </Text>
                   </Pressable>
                 );
@@ -303,8 +308,11 @@ export function ReplyHistoryScreen() {
                 />
                 <Text style={styles.emptyTitle}>Nothing to show yet</Text>
                 <Text style={styles.emptyText}>
-                  Once auto-reply attempts are stored, they will appear here for
-                  training.
+                  {activeFilter === "all"
+                    ? "Once auto-reply attempts are stored, they will appear here for training."
+                    : activeFilter === "replied"
+                      ? "No messages with AI replies match this filter yet."
+                      : "No pending or non-replied messages match this filter yet."}
                 </Text>
               </View>
             )}
@@ -333,6 +341,32 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.72)",
     fontFamily: typography.medium,
     fontSize: 14,
+  },
+  filterBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 16,
+  },
+  filterChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.borderDark,
+    backgroundColor: palette.cardBackgroundAlt,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  filterChipActive: {
+    borderColor: "rgba(37,211,102,0.34)",
+    backgroundColor: "rgba(37,211,102,0.14)",
+  },
+  filterChipText: {
+    color: "rgba(255,255,255,0.76)",
+    fontFamily: typography.semibold,
+    fontSize: 13,
+  },
+  filterChipTextActive: {
+    color: palette.primaryGreen,
   },
   noticeCard: {
     borderRadius: 16,
@@ -401,6 +435,26 @@ const styles = StyleSheet.create({
     fontFamily: typography.medium,
     fontSize: 14,
     lineHeight: 22,
+  },
+  replyBlock: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    padding: 12,
+    gap: 6,
+  },
+  replyLabel: {
+    color: "rgba(255,255,255,0.52)",
+    fontFamily: typography.semibold,
+    fontSize: 12,
+    textTransform: "uppercase",
+  },
+  replyPreview: {
+    color: "rgba(255,255,255,0.82)",
+    fontFamily: typography.medium,
+    fontSize: 14,
+    lineHeight: 21,
   },
   historyHint: {
     color: "rgba(255,255,255,0.62)",
