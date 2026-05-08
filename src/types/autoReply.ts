@@ -102,6 +102,10 @@ export type ChatHistoryMessage = {
   createdOn?: string;
   matched?: boolean;
   matchType?: string | null;
+  replyContent?: string | null;
+  replyCreatedOn?: string | null;
+  replyRole?: string | null;
+  source?: string | null;
 };
 
 export type TrainingDraft = {

@@ -93,6 +93,7 @@ export function RulesScreen() {
   const [editorVisible, setEditorVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<AutoReplyMessage | null>(null);
   const [initialDraft, setInitialDraft] = useState<TrainingDraft | null>(null);
+  const [returnToHistoryOnClose, setReturnToHistoryOnClose] = useState(false);
 
   const fetchRules = useCallback(
     async (isRefresh = false) => {
@@ -208,9 +209,32 @@ export function RulesScreen() {
       return;
     }
 
+    setReturnToHistoryOnClose(Boolean(route.params?.openedFromHistory));
     openCreateRuleEditor(draft);
-    navigation.setParams({ prefillTraining: undefined });
-  }, [navigation, openCreateRuleEditor, route.params?.prefillTraining]);
+    navigation.setParams({
+      prefillTraining: undefined,
+      openedFromHistory: undefined,
+    });
+  }, [
+    navigation,
+    openCreateRuleEditor,
+    route.params?.openedFromHistory,
+    route.params?.prefillTraining,
+  ]);
+
+  const closeEditor = useCallback(
+    (shouldNavigateBack = returnToHistoryOnClose) => {
+      setEditorVisible(false);
+      setEditingRule(null);
+      setInitialDraft(null);
+      setReturnToHistoryOnClose(false);
+
+      if (shouldNavigateBack) {
+        navigation.navigate("Reply History");
+      }
+    },
+    [navigation, returnToHistoryOnClose],
+  );
 
   const handleSave = async (
     payload: AutoReplyMessagePayload,
@@ -480,11 +504,7 @@ export function RulesScreen() {
         gmailId={user?.email || ""}
         businessId={resolvedBusinessId || null}
         apiBaseUrl={settings.apiBaseUrl}
-        onClose={() => {
-          setEditorVisible(false);
-          setEditingRule(null);
-          setInitialDraft(null);
-        }}
+        onClose={() => closeEditor()}
         onSubmit={handleSave}
       />
     </View>
