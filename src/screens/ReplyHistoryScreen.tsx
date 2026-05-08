@@ -1,4 +1,4 @@
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,10 +13,19 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { PageScaffold } from "../components/PageScaffold";
+import { RuleEditorModal } from "../components/RuleEditorModal";
 import { SectionCard } from "../components/SectionCard";
+import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
-import { listChatConversationSummaries } from "../services/api";
-import { ChatHistoryMessage, TrainingDraft } from "../types/autoReply";
+import {
+  createAutoReplyMessage,
+  listChatConversationSummaries,
+} from "../services/api";
+import {
+  AutoReplyMessagePayload,
+  ChatHistoryMessage,
+  TrainingDraft,
+} from "../types/autoReply";
 import { palette, typography } from "../theme/palette";
 
 const CHAT_HISTORY_BASE_URL =
@@ -51,7 +60,7 @@ function buildTrainingDraft(
 }
 
 export function ReplyHistoryScreen() {
-  const navigation = useNavigation<any>();
+  const { user } = useAuth();
   const { settings } = useAppSettings();
   const [history, setHistory] = useState<ChatHistoryMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +68,8 @@ export function ReplyHistoryScreen() {
   const [error, setError] = useState<string | null>(null);
   const [trainingHistoryId, setTrainingHistoryId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<ReplyHistoryFilter>("all");
+  const [editorVisible, setEditorVisible] = useState(false);
+  const [initialDraft, setInitialDraft] = useState<TrainingDraft | null>(null);
 
   const businessId = useMemo(
     () => settings.businessId.trim() || null,
@@ -135,10 +146,10 @@ export function ReplyHistoryScreen() {
 
   const handleUseForTraining = useCallback(
     async (summary: ChatHistoryMessage) => {
-      if (!CHAT_HISTORY_BASE_URL) {
+      if (!settings.apiBaseUrl) {
         Alert.alert(
           "Reply history unavailable",
-          "Set EXPO_PUBLIC_API_BASE_URL first.",
+          "Set the API base URL first.",
         );
         return;
       }
@@ -162,10 +173,8 @@ export function ReplyHistoryScreen() {
           return;
         }
 
-        navigation.navigate("Rules", {
-          prefillTraining: draft,
-          openedFromHistory: true,
-        });
+        setInitialDraft(draft);
+        setEditorVisible(true);
       } catch (trainError) {
         Alert.alert(
           "Unable to prepare training",
@@ -177,7 +186,31 @@ export function ReplyHistoryScreen() {
         setTrainingHistoryId(null);
       }
     },
-    [businessId, navigation],
+    [businessId, settings.apiBaseUrl],
+  );
+
+  const closeEditor = useCallback(() => {
+    setEditorVisible(false);
+    setInitialDraft(null);
+  }, []);
+
+  const handleSaveTraining = useCallback(
+    async (payload: AutoReplyMessagePayload) => {
+      if (!settings.apiBaseUrl || !user?.email) {
+        throw new Error("Missing account or API settings.");
+      }
+
+      await createAutoReplyMessage({
+        baseUrl: settings.apiBaseUrl,
+        payload,
+      });
+
+      Alert.alert(
+        "Added to training",
+        "This reply history example has been saved to training.",
+      );
+    },
+    [settings.apiBaseUrl, user?.email],
   );
 
   return (
@@ -319,6 +352,17 @@ export function ReplyHistoryScreen() {
           </ScrollView>
         )}
       </SectionCard>
+
+      <RuleEditorModal
+        visible={editorVisible}
+        editingRule={null}
+        initialDraft={initialDraft}
+        gmailId={user?.email || ""}
+        businessId={businessId}
+        apiBaseUrl={settings.apiBaseUrl}
+        onClose={closeEditor}
+        onSubmit={handleSaveTraining}
+      />
     </PageScaffold>
   );
 }
