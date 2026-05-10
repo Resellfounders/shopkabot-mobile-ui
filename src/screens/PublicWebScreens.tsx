@@ -1,6 +1,6 @@
 ﻿import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -24,6 +24,14 @@ import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { signInWithGooglePopup, signOutUser } from "../services/firebase";
 import {
+  initializeWebTracking,
+  trackBeginCheckout,
+  trackContact,
+  trackCustomEvent,
+  trackPageView,
+  trackPurchase,
+} from "../services/marketingTracking";
+import {
   createRazorpaySubscription,
   getCurrentRazorpaySubscription,
   getRazorpayConfig,
@@ -39,9 +47,10 @@ const POLL_ATTEMPTS = 12;
 const POLL_DELAY_MS = 5000;
 
 const brandLogo = require("../../assets/icon.png");
-const heroWideImage = require("../../assets/demo/match-and-reply.png");
-const loginImage = require("../../assets/demo/login.png");
-const customerMessageImage = require("../../assets/demo/customer-message.png");
+const demoPlaceholderImage = require("../../assets/Shop-ka-bot.png");
+const heroWideImage = demoPlaceholderImage;
+const loginImage = demoPlaceholderImage;
+const customerMessageImage = demoPlaceholderImage;
 const creatorTiles = [
   {
     name: "@shopkabot.store",
@@ -140,6 +149,33 @@ const testimonials = [
     text: "This is the exact kind of flow we needed for paid traffic. Fewer steps, less confusion, and better account mapping.",
   },
 ];
+
+function getPlanTrackingValue(
+  plan?: Pick<SubscriptionPlan, "name" | "total"> | null,
+) {
+  if (!plan) {
+    return undefined;
+  }
+
+  const numericValue = Number((plan.total || "").replace(/[^\d.]/g, ""));
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    return numericValue;
+  }
+
+  if (plan.name === "12 Months") {
+    return 9588;
+  }
+
+  if (plan.name === "6 Months") {
+    return 5394;
+  }
+
+  if (plan.name === "Monthly") {
+    return 999;
+  }
+
+  return undefined;
+}
 
 const faqItems = [
   {
@@ -550,6 +586,7 @@ export function PublicGetStartedScreen() {
   const [subscriptionError, setSubscriptionError] = useState<string | null>(
     null,
   );
+  const trackedPurchasesRef = useRef<Set<string>>(new Set());
 
   const frontendRazorpayKeyId =
     process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "";
@@ -567,6 +604,18 @@ export function PublicGetStartedScreen() {
     if (typeof document !== "undefined") {
       document.title = "ShopKaBot | Choose Your Plan";
     }
+
+    initializeWebTracking();
+    trackPageView({
+      pagePath: "/get-started",
+      pageTitle: "ShopKaBot | Choose Your Plan",
+    });
+    trackBeginCheckout({
+      content_name: "ShopKaBot Subscription Plans",
+      content_type: "subscription_collection",
+      currency: "INR",
+      value: 999,
+    });
   }, []);
 
   useEffect(() => {
@@ -576,6 +625,32 @@ export function PublicGetStartedScreen() {
 
     routeToAppHome();
   }, [hasActiveSubscription, pollingSubscription, routeToAppHome, user?.email]);
+
+  const trackActivatedPurchase = useCallback(
+    (
+      record: RazorpaySubscriptionRecord,
+      plan?: Pick<SubscriptionPlan, "name" | "total">,
+    ) => {
+      const trackingKey = record.providerSubscriptionId || record.id;
+      if (!trackingKey || trackedPurchasesRef.current.has(trackingKey)) {
+        return;
+      }
+
+      trackedPurchasesRef.current.add(trackingKey);
+      trackPurchase({
+        transaction_id: record.providerPaymentId || trackingKey,
+        subscription_id: trackingKey,
+        content_name: record.planName,
+        content_type: "subscription_plan",
+        currency: "INR",
+        value: getPlanTrackingValue({
+          name: plan?.name || record.planName,
+          total: plan?.total || "",
+        }),
+      });
+    },
+    [],
+  );
 
   const loadCurrentSubscription = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -640,7 +715,11 @@ export function PublicGetStartedScreen() {
   }, [loadCurrentSubscription, user?.email]);
 
   const pollForSubscriptionSync = useCallback(
-    async (subscriptionId: string, planName: string) => {
+    async (
+      subscriptionId: string,
+      planName: string,
+      plan?: Pick<SubscriptionPlan, "name" | "total">,
+    ) => {
       if (!user?.email) {
         return null;
       }
@@ -673,6 +752,7 @@ export function PublicGetStartedScreen() {
             !!record && ACTIVE_SUBSCRIPTION_STATUSES.has(record.status);
 
           if (record && isMatchingSubscription && isActive) {
+            trackActivatedPurchase(record, plan);
             setCurrentSubscription(record);
             setMessageTone("success");
             setStatusMessage(
@@ -696,12 +776,16 @@ export function PublicGetStartedScreen() {
         setPollingSubscription(false);
       }
     },
-    [routeToAppHome, settings.apiBaseUrl, user?.email],
+    [routeToAppHome, settings.apiBaseUrl, trackActivatedPurchase, user?.email],
   );
 
   const startPlanCheckout = useCallback(
     async (plan: SubscriptionPlan) => {
       if (plan.contactUrl) {
+        trackContact({
+          content_name: plan.name,
+          content_type: "enterprise_sales",
+        });
         await Linking.openURL(plan.contactUrl);
         return;
       }
@@ -726,6 +810,10 @@ export function PublicGetStartedScreen() {
         setStatusMessage(
           `Continue with Google first so the ${plan.name} plan is linked to the right ShopKaBot account.`,
         );
+        trackCustomEvent("checkout_google_signin_required", {
+          plan_name: plan.name,
+          page_path: "/get-started",
+        });
 
         try {
           await signInWithGooglePopup();
@@ -744,6 +832,13 @@ export function PublicGetStartedScreen() {
       setActivePlanName(plan.name);
       setMessageTone("info");
       setStatusMessage(`Preparing ${plan.name} checkout for ${user.email}...`);
+      trackBeginCheckout({
+        content_name: plan.name,
+        content_type: "subscription_plan",
+        currency: "INR",
+        value: getPlanTrackingValue(plan),
+        num_items: 1,
+      });
       let createdSubscriptionId: string | undefined;
 
       try {
@@ -772,7 +867,7 @@ export function PublicGetStartedScreen() {
           setStatusMessage(
             `Razorpay checkout opened for ${plan.name}. Complete payment and return here while we keep checking for activation.`,
           );
-          void pollForSubscriptionSync(subscription.subscriptionId, plan.name);
+          void pollForSubscriptionSync(subscription.subscriptionId, plan.name, plan);
           return;
         }
 
@@ -791,6 +886,15 @@ export function PublicGetStartedScreen() {
           razorpaySubscriptionId: checkoutResponse.razorpay_subscription_id,
           razorpaySignature: checkoutResponse.razorpay_signature,
         });
+        trackPurchase({
+          transaction_id: checkoutResponse.razorpay_payment_id,
+          subscription_id: checkoutResponse.razorpay_subscription_id,
+          content_name: plan.name,
+          content_type: "subscription_plan",
+          currency: "INR",
+          value: getPlanTrackingValue(plan),
+        });
+        trackedPurchasesRef.current.add(checkoutResponse.razorpay_subscription_id);
 
         const refreshed = await loadCurrentSubscription({ silent: true });
         const isSubscriptionActive =
@@ -813,7 +917,7 @@ export function PublicGetStartedScreen() {
         setStatusMessage(
           `${plan.name} payment was verified. Waiting for the subscription record to become active before opening the app...`,
         );
-        void pollForSubscriptionSync(subscription.subscriptionId, plan.name);
+        void pollForSubscriptionSync(subscription.subscriptionId, plan.name, plan);
       } catch (error) {
         const message =
           error instanceof Error
@@ -827,7 +931,7 @@ export function PublicGetStartedScreen() {
             setStatusMessage(
               `${message} We opened the fallback Razorpay checkout link so the payment can still continue.`,
             );
-            void pollForSubscriptionSync(createdSubscriptionId, plan.name);
+            void pollForSubscriptionSync(createdSubscriptionId, plan.name, plan);
           } catch (fallbackError) {
             setMessageTone("error");
             setStatusMessage(
@@ -872,6 +976,10 @@ export function PublicGetStartedScreen() {
     setStatusMessage(
       "Choose the Google account that should own this ShopKaBot subscription.",
     );
+    trackCustomEvent("checkout_google_signin_click", {
+      source: user ? "switch_account" : "continue_with_google",
+      page_path: "/get-started",
+    });
 
     try {
       if (user) {
@@ -886,6 +994,20 @@ export function PublicGetStartedScreen() {
           : "Unable to switch Google account.",
       );
     }
+  };
+
+  const handleEnterpriseContact = () => {
+    trackContact({
+      content_name: enterpriseSubscriptionPlan?.name || "Enterprise / Agentic AI",
+      content_type: "enterprise_sales",
+    });
+
+    if (enterpriseSubscriptionPlan?.contactUrl) {
+      void Linking.openURL(enterpriseSubscriptionPlan.contactUrl);
+      return;
+    }
+
+    void Linking.openURL(FRONTEND_APP_SUPPORT_WHATSAPP_LINK);
   };
 
   return (
@@ -1097,11 +1219,7 @@ export function PublicGetStartedScreen() {
 
                 {enterpriseSubscriptionPlan ? (
                   <Pressable
-                    onPress={() =>
-                      enterpriseSubscriptionPlan.contactUrl
-                        ? void Linking.openURL(enterpriseSubscriptionPlan.contactUrl)
-                        : void Linking.openURL(FRONTEND_APP_SUPPORT_WHATSAPP_LINK)
-                    }
+                    onPress={handleEnterpriseContact}
                     style={({ pressed }) => [
                       styles.enterpriseContactButton,
                       pressed && styles.pressed,

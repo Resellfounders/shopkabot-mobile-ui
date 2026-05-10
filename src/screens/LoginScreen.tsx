@@ -17,6 +17,12 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "../context/AuthContext";
 import { signInWithGooglePopup } from "../services/firebase";
+import {
+  initializeWebTracking,
+  trackCustomEvent,
+  trackPageView,
+  trackViewContent,
+} from "../services/marketingTracking";
 import { typography } from "../theme/palette";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -174,6 +180,22 @@ export function LoginScreen() {
     Platform.OS === "web" ? !submitting : Boolean(request) && !submitting;
 
   useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+
+    initializeWebTracking();
+    trackPageView({
+      pagePath: "/",
+      pageTitle: "ShopKaBot | Login",
+    });
+    trackViewContent({
+      content_name: "ShopKaBot Login",
+      content_type: "app_entry",
+    });
+  }, []);
+
+  useEffect(() => {
     const idToken =
       response?.type === "success" ? response.params.id_token : undefined;
 
@@ -198,6 +220,13 @@ export function LoginScreen() {
   }, [response, signInWithGoogle]);
 
   const handleGoogleLogin = async () => {
+    if (Platform.OS === "web") {
+      trackCustomEvent("login_cta_click", {
+        destination: "google_sign_in",
+        page_path: "/",
+      });
+    }
+
     if (Platform.OS === "web") {
       try {
         setSubmitting(true);
@@ -535,8 +564,7 @@ export function LoginScreen() {
                     </Text>
 
                     <Text style={styles.salesFunnelSubtitle}>
-                      Auto-replies -> product suggestion -> follow-up -> order
-                      intent
+                      {"Auto-replies -> product suggestion -> follow-up -> order intent"}
                     </Text>
                   </View>
 

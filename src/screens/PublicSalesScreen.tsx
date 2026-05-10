@@ -26,6 +26,13 @@ import {
   statCards,
   useCaseCards,
 } from "../content/shopkabotSales";
+import {
+  initializeWebTracking,
+  trackCustomEvent,
+  trackLead,
+  trackPageView,
+  trackViewContent,
+} from "../services/marketingTracking";
 import { palette, typography } from "../theme/palette";
 import { navigateToPublicWebRoute } from "../utils/webEntry";
 import { setWebPageMetadata } from "../utils/webMetadata";
@@ -122,6 +129,17 @@ export function PublicSalesScreen() {
 
   useEffect(() => {
     setWebPageMetadata(salesSeo);
+    initializeWebTracking();
+    trackPageView({
+      pagePath: "/sales",
+      pageTitle: salesSeo.title,
+    });
+    trackViewContent({
+      content_name: "ShopKaBot Launch Plan",
+      content_type: "subscription_plan",
+      currency: "INR",
+      value: 999,
+    });
   }, []);
 
   useEffect(() => {
@@ -172,10 +190,24 @@ export function PublicSalesScreen() {
   };
 
   const handlePrimaryCta = () => {
+    trackLead({
+      content_name: "ShopKaBot Sales Page",
+      content_type: "subscription_plan",
+      currency: "INR",
+      value: 999,
+    });
+    trackCustomEvent("sales_cta_click", {
+      destination: "get_started",
+      page_path: "/sales",
+    });
     navigateToPublicWebRoute("get-started");
   };
 
   const handleDemoCta = () => {
+    trackCustomEvent("sales_demo_click", {
+      page_path: "/sales",
+      section: "demo",
+    });
     scrollToSection("demo");
   };
 
