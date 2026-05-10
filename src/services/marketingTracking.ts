@@ -189,6 +189,12 @@ export function trackPurchase(params?: TrackingParams) {
   trackMetaEvent("track", "Purchase", params);
 }
 
+export function trackCustomerWon(params?: TrackingParams) {
+  initializeWebTracking();
+  void logFirebaseEvent("customer_won", params);
+  trackMetaEvent("trackCustom", "CUSTOMER_WON", params);
+}
+
 export function trackContact(params?: TrackingParams) {
   initializeWebTracking();
   void logFirebaseEvent("contact", params);
