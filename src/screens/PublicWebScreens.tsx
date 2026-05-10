@@ -45,6 +45,7 @@ import { navigateToPublicWebRoute } from "../utils/webEntry";
 
 const POLL_ATTEMPTS = 12;
 const POLL_DELAY_MS = 5000;
+const CHECKOUT_BUTTON_GREEN = "#17643D";
 
 const brandLogo = require("../../assets/icon.png");
 const demoPlaceholderImage = require("../../assets/Shop-ka-bot.png");
@@ -1018,81 +1019,18 @@ export function PublicGetStartedScreen() {
     >
       <View style={styles.choosePlanPage}>
         <View style={styles.maxShell}>
+          <View style={styles.checkoutIntroBlock}>
+            <Text style={styles.checkoutBigHeadline}>
+              Unlock the full power of automation.
+            </Text>
+            <Text style={styles.checkoutBigSubheadline}>
+              Join growing businesses using ShopKaBot to respond faster,
+              activate plans cleanly, and continue into the main web app
+              without confusion.
+            </Text>
+          </View>
+
           <View style={[styles.checkoutLayout, isDesktop && styles.checkoutLayoutDesktop]}>
-            <View style={styles.checkoutLeftColumn}>
-              <View style={styles.checkoutIntroBlock}>
-                <Text style={styles.checkoutBigHeadline}>
-                  Unlock the full power of automation.
-                </Text>
-                <Text style={styles.checkoutBigSubheadline}>
-                  Join growing businesses using ShopKaBot to respond faster,
-                  activate plans cleanly, and continue into the main web app
-                  without confusion.
-                </Text>
-              </View>
-
-              <View style={styles.checkoutInfoPanel}>
-                <View style={styles.checkoutInfoHeader}>
-                  <Text style={styles.checkoutInfoHeaderText}>What happens next</Text>
-                </View>
-                <View style={styles.checkoutInfoBody}>
-                  <ChecklistRow text="Choose the subscription that matches the business need." />
-                  <ChecklistRow text="Use the Google account that should own the ShopKaBot workspace." />
-                  <ChecklistRow text="Pay on Razorpay and continue into the main app with the same account." />
-                  <ChecklistRow text="Connect WhatsApp Business after the plan becomes active." />
-                </View>
-              </View>
-
-              <View style={styles.accountPanel}>
-                <Text style={styles.accountPanelTitle}>Selected Google account</Text>
-                {user ? (
-                  <>
-                    <View style={styles.accountChip}>
-                      <Ionicons
-                        name="logo-google"
-                        size={18}
-                        color={palette.darkWhatsappGreen}
-                      />
-                      <View style={styles.accountChipCopy}>
-                        <Text style={styles.accountChipTitle}>
-                          {user.displayName || "ShopKaBot user"}
-                        </Text>
-                        <Text style={styles.accountChipText}>{user.email}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.accountPanelActions}>
-                      <Pressable
-                        onPress={handleSwitchAccount}
-                        style={({ pressed }) => [
-                          styles.secondaryGhostButton,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text style={styles.secondaryGhostButtonText}>Use Another Account</Text>
-                      </Pressable>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.accountPanelHint}>
-                      Sign in first so the subscription is attached to the right
-                      account.
-                    </Text>
-                    <Pressable
-                      onPress={handleSwitchAccount}
-                      style={({ pressed }) => [
-                        styles.googlePrimaryButton,
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <Ionicons name="logo-google" size={18} color="#FFFFFF" />
-                      <Text style={styles.googlePrimaryButtonText}>Continue With Google</Text>
-                    </Pressable>
-                  </>
-                )}
-              </View>
-            </View>
-
             <View style={styles.checkoutRightColumn}>
               <View style={styles.checkoutCard}>
                 <View style={styles.checkoutCardHeader}>
@@ -1243,6 +1181,69 @@ export function PublicGetStartedScreen() {
                   <Text style={styles.peopleViewingBold}>12 people</Text> are viewing
                   this page right now
                 </Text>
+              </View>
+            </View>
+
+            <View style={styles.checkoutLeftColumn}>
+              <View style={styles.checkoutInfoPanel}>
+                <View style={styles.checkoutInfoHeader}>
+                  <Text style={styles.checkoutInfoHeaderText}>What happens next</Text>
+                </View>
+                <View style={styles.checkoutInfoBody}>
+                  <ChecklistRow text="Choose the subscription that matches the business need." />
+                  <ChecklistRow text="Use the Google account that should own the ShopKaBot workspace." />
+                  <ChecklistRow text="Pay on Razorpay and continue into the main app with the same account." />
+                  <ChecklistRow text="Connect WhatsApp Business after the plan becomes active." />
+                </View>
+              </View>
+
+              <View style={styles.accountPanel}>
+                <Text style={styles.accountPanelTitle}>Selected Google account</Text>
+                {user ? (
+                  <>
+                    <View style={styles.accountChip}>
+                      <Ionicons
+                        name="logo-google"
+                        size={18}
+                        color={palette.darkWhatsappGreen}
+                      />
+                      <View style={styles.accountChipCopy}>
+                        <Text style={styles.accountChipTitle}>
+                          {user.displayName || "ShopKaBot user"}
+                        </Text>
+                        <Text style={styles.accountChipText}>{user.email}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.accountPanelActions}>
+                      <Pressable
+                        onPress={handleSwitchAccount}
+                        style={({ pressed }) => [
+                          styles.secondaryGhostButton,
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <Text style={styles.secondaryGhostButtonText}>Use Another Account</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.accountPanelHint}>
+                      Sign in first so the subscription is attached to the right
+                      account.
+                    </Text>
+                    <Pressable
+                      onPress={handleSwitchAccount}
+                      style={({ pressed }) => [
+                        styles.googlePrimaryButton,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Ionicons name="logo-google" size={18} color="#FFFFFF" />
+                      <Text style={styles.googlePrimaryButtonText}>Continue With Google</Text>
+                    </Pressable>
+                  </>
+                )}
               </View>
             </View>
           </View>
@@ -2594,7 +2595,7 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   checkoutLayoutDesktop: {
-    flexDirection: "row",
+    flexDirection: "row-reverse",
     alignItems: "flex-start",
   },
   checkoutLeftColumn: {
@@ -2940,7 +2941,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     borderRadius: 14,
-    backgroundColor: palette.primaryGreen,
+    backgroundColor: CHECKOUT_BUTTON_GREEN,
     paddingHorizontal: 18,
     paddingVertical: 14,
   },
@@ -3105,7 +3106,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     minHeight: 56,
     borderRadius: 16,
-    backgroundColor: palette.primaryGreen,
+    backgroundColor: CHECKOUT_BUTTON_GREEN,
     paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
@@ -3129,11 +3130,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(22, 101, 52, 0.18)",
-    backgroundColor: "#dff7e7",
+    borderColor: CHECKOUT_BUTTON_GREEN,
+    backgroundColor: CHECKOUT_BUTTON_GREEN,
   },
   enterpriseContactButtonText: {
-    color: "#14532d",
+    color: "#ffffff",
     fontFamily: typography.extrabold,
     fontSize: 14,
   },
