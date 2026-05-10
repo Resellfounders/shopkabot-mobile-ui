@@ -2,6 +2,7 @@ import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -18,10 +19,15 @@ import { DashboardScreen } from "../screens/DashboardScreen";
 import { DisableAiReplyScreen } from "../screens/DisableAiReplyScreen";
 import { HelpAboutScreen } from "../screens/HelpAboutScreen";
 import { LoginScreen } from "../screens/LoginScreen";
+import {
+  PublicGetStartedScreen,
+} from "../screens/PublicWebScreens";
+import { PublicSalesScreen as LaunchSalesScreen } from "../screens/PublicSalesScreen";
 import { ReplyHistoryScreen } from "../screens/ReplyHistoryScreen";
 import { RulesScreen } from "../screens/RulesScreen";
 import { SubscriptionScreen } from "../screens/SubscriptionScreen";
 import { TestTheBotScreen } from "../screens/TestRulesScreen";
+import { usePublicWebRoute } from "../utils/webEntry";
 
 const Drawer = createDrawerNavigator();
 
@@ -42,6 +48,7 @@ export function AppNavigator() {
   const { isReady, user } = useAuth();
   const { isLoaded } = useAppSettings();
   const isDesktop = width >= 1024;
+  const publicWebRoute = usePublicWebRoute();
 
   if (!isReady || !isLoaded) {
     return (
@@ -49,6 +56,20 @@ export function AppNavigator() {
         <ActivityIndicator size="large" color={palette.primaryGreen} />
       </View>
     );
+  }
+
+  if (Platform.OS === "web") {
+    if (publicWebRoute === "get-started") {
+      return <PublicGetStartedScreen />;
+    }
+
+    if (publicWebRoute === "sales") {
+      return <LaunchSalesScreen />;
+    }
+
+    if (!user) {
+      return <LoginScreen />;
+    }
   }
 
   if (!user) {

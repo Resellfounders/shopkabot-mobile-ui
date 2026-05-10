@@ -2,18 +2,13 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import { AppState, AppStateStatus, Platform } from "react-native";
 
+import { ACTIVE_SUBSCRIPTION_STATUSES } from "../content/subscriptions";
 import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import {
   getCurrentRazorpaySubscription,
   RazorpaySubscriptionRecord,
 } from "../services/razorpay";
-
-export const ACTIVE_SUBSCRIPTION_STATUSES = new Set([
-  "active",
-  "authenticated",
-  "completed",
-]);
 
 export function useCurrentSubscription() {
   const { user } = useAuth();
