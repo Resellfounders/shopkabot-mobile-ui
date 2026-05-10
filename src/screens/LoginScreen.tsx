@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -93,7 +92,6 @@ const benefits = [
   "Best for shops, studios, service businesses, and online sellers",
   "Deploy quickly with simple Google sign in and guided setup",
 ];
-const brandLogo = require("../../assets/icon.png");
 
 export function LoginScreen() {
   const { width } = useWindowDimensions();
@@ -258,11 +256,6 @@ export function LoginScreen() {
         <View style={styles.container}>
           <View style={[styles.navbar, isTablet && styles.navbarDesktop]}>
             <View style={styles.brandBlock}>
-              <Image
-                source={brandLogo}
-                style={styles.brandLogo}
-                resizeMode="contain"
-              />
               <Text style={styles.brandName}>ShopKaBot</Text>
               <Text style={styles.brandTag}>Your Personal AI Agent</Text>
             </View>
@@ -304,7 +297,7 @@ export function LoginScreen() {
               <Text style={styles.heroDescription}>
                 ShopKaBot replies to customer enquiries, shares product details,
                 follows up with leads, and helps businesses convert WhatsApp
-                chats into orders — even when your team is busy.
+                chats into orders - even when your team is busy.
               </Text>
 
               <Pressable
@@ -351,17 +344,13 @@ export function LoginScreen() {
                   style={styles.chatHeader}
                 >
                   <View style={styles.chatAvatar}>
-                    <Image
-                      source={brandLogo}
-                      style={styles.chatAvatarImage}
-                      resizeMode="cover"
-                    />
+                    <Text style={styles.chatAvatarText}>S</Text>
                   </View>
 
                   <View style={styles.chatHeaderTextBlock}>
                     <Text style={styles.chatHeaderTitle}>ShopKaBot AI</Text>
                     <Text style={styles.chatHeaderSubtitle}>
-                      Online • replying instantly
+                      Online - replying instantly
                     </Text>
                   </View>
 
@@ -542,11 +531,11 @@ export function LoginScreen() {
                 <View style={styles.salesFunnelCard}>
                   <View style={styles.salesFunnelHeader}>
                     <Text style={styles.salesFunnelTitle}>
-                      Today’s AI sales flow
+                      Today's AI sales flow
                     </Text>
 
                     <Text style={styles.salesFunnelSubtitle}>
-                      Auto-replies → product suggestion → follow-up → order
+                      Auto-replies -> product suggestion -> follow-up -> order
                       intent
                     </Text>
                   </View>
@@ -735,11 +724,6 @@ const styles = StyleSheet.create({
   brandBlock: {
     gap: 2,
   },
-  brandLogo: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-  },
   brandName: {
     color: "#FFFFFF",
     fontFamily: typography.extrabold,
@@ -913,11 +897,13 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: "#FFFFFF",
-    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  chatAvatarImage: {
-    width: "100%",
-    height: "100%",
+  chatAvatarText: {
+    color: "#075E54",
+    fontFamily: typography.extrabold,
+    fontSize: 20,
   },
   chatHeaderTextBlock: {
     flex: 1,

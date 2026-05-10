@@ -15,6 +15,11 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { PageScaffold } from "../components/PageScaffold";
 import { SectionCard } from "../components/SectionCard";
+import {
+  enterpriseSubscriptionPlan,
+  paidSubscriptionPlans,
+  SubscriptionPlan,
+} from "../content/subscriptions";
 import { useAuth } from "../context/AuthContext";
 import { useAppSettings } from "../context/AppSettingsContext";
 import {
@@ -32,98 +37,9 @@ import {
 import { saveUserSettingsSubscriptionSnapshot } from "../services/whatsappConnection";
 import { palette, typography } from "../theme/palette";
 
-type PlanCard = {
-  name: string;
-  price: string;
-  total: string;
-  badge: string;
-  description: string;
-  highlight: boolean;
-  bullets: string[];
-  buttonLabel: string;
-  planId?: string;
-  totalCount?: number;
-  contactUrl?: string;
-};
-
 const POLL_ATTEMPTS = 12;
 const POLL_DELAY_MS = 5000;
-const FRONTEND_APP_SUPPORT_WHATSAPP_LINK =
-  "https://wa.me/919768260471?text=" +
-  encodeURIComponent(
-    "Hi, I need help with my ShopKaBot subscription and WhatsApp onboarding.",
-  );
 const META_SYNC_BASE_URL = process.env.EXPO_PUBLIC_SETTINGS_API_BASE_URL || "";
-
-const plans: PlanCard[] = [
-  {
-    name: "Monthly",
-    price: "Rs. 999/month",
-    total: "Rs. 999",
-    badge: "Good For Trying",
-    description: "Best for getting started.",
-    highlight: false,
-    bullets: [
-      "🗓️ 1 month billing",
-      "💳 Total: Rs. 999",
-      "🚀 Great for a first setup",
-    ],
-    planId: process.env.EXPO_PUBLIC_RAZORPAY_PLAN_MONTHLY_ID,
-    totalCount: 1,
-    buttonLabel: "Start Monthly Plan",
-  },
-  {
-    name: "6 Months",
-    price: "Rs. 899/month",
-    total: "Rs. 5,394",
-    badge: "Better Value",
-    description: "Saves Rs. 600 compared to monthly billing.",
-    highlight: true,
-    bullets: [
-      "🗓️ 6 month billing",
-      "💳 Total: Rs. 5,394",
-      "📈 Better value for growing teams",
-    ],
-    planId: process.env.EXPO_PUBLIC_RAZORPAY_PLAN_6_MONTHS_ID,
-    totalCount: 1,
-    buttonLabel: "Start 6 Month Plan",
-  },
-  {
-    name: "12 Months",
-    price: "Rs. 799/month",
-    total: "Rs. 9,588",
-    badge: "Best Value",
-    description: "Saves Rs. 2,400 compared to monthly billing.",
-    highlight: false,
-    bullets: [
-      "🗓️ 12 month billing",
-      "💳 Total: Rs. 9,588",
-      "🏆 Lowest long-term price",
-    ],
-    planId: process.env.EXPO_PUBLIC_RAZORPAY_PLAN_12_MONTHS_ID,
-    totalCount: 1,
-    buttonLabel: "Start 12 Month Plan",
-  },
-  {
-    name: "Enterprise / Agentic AI",
-    price: "Custom Pricing",
-    total: "Built for advanced automation",
-    badge: "Premium",
-    description: "For advanced workflows and custom integrations.",
-    highlight: false,
-    bullets: [
-      "💬 Supports up to 100 customer conversations per day",
-      "🏢 Need more than 100 conversations per day? Please connect with Enterprise",
-      "🧠 Advanced agentic AI flows and business logic",
-      "🔌 CRM, Shopify, API, and internal tool integrations",
-    ],
-    contactUrl:
-      process.env.EXPO_PUBLIC_CONTACT_BOOKING_URL ||
-      process.env.EXPO_PUBLIC_CONTACT_WHATSAPP_URL ||
-      "",
-    buttonLabel: "Talk To Sales",
-  },
-];
 
 export function SubscriptionScreen() {
   const navigation = useNavigation<any>();
@@ -241,7 +157,7 @@ export function SubscriptionScreen() {
     ],
   );
 
-  const handlePlanPress = async (plan: PlanCard) => {
+  const handlePlanPress = async (plan: SubscriptionPlan) => {
     if (plan.contactUrl) {
       await Linking.openURL(plan.contactUrl);
       return;
@@ -391,13 +307,6 @@ export function SubscriptionScreen() {
     }
   };
 
-  const enterprisePlan = plans.find(
-    (plan) => plan.name === "Enterprise / Agentic AI",
-  );
-  const subscriptionPlans = plans.filter(
-    (plan) => plan.name !== "Enterprise / Agentic AI",
-  );
-
   return (
     <PageScaffold
       title="Subscription"
@@ -523,7 +432,7 @@ export function SubscriptionScreen() {
         </View>
 
         <View style={styles.planGrid}>
-          {subscriptionPlans.map((plan) => {
+          {paidSubscriptionPlans.map((plan) => {
             const isActivePlan =
               hasActiveSubscription &&
               currentSubscription?.planId === plan.planId;
@@ -601,16 +510,16 @@ export function SubscriptionScreen() {
           })}
         </View>
 
-        {enterprisePlan ? (
+        {enterpriseSubscriptionPlan ? (
           <LinearGradient
             colors={["rgba(0,194,168,0.14)", "rgba(255,255,255,0.03)"]}
             style={styles.enterpriseCard}
           >
             <View style={styles.planHeader}>
-              <Text style={styles.planName}>{enterprisePlan.name}</Text>
+              <Text style={styles.planName}>{enterpriseSubscriptionPlan.name}</Text>
               <View style={[styles.badge, styles.enterpriseBadge]}>
                 <Text style={[styles.badgeText, styles.enterpriseBadgeText]}>
-                  {enterprisePlan.badge}
+                  {enterpriseSubscriptionPlan.badge}
                 </Text>
               </View>
             </View>
@@ -619,10 +528,10 @@ export function SubscriptionScreen() {
               For advanced automation and higher daily volume
             </Text>
             <Text style={styles.planDescription}>
-              {enterprisePlan.description}
+              {enterpriseSubscriptionPlan.description}
             </Text>
 
-            {enterprisePlan.bullets.map((bullet) => (
+            {enterpriseSubscriptionPlan.bullets.map((bullet) => (
               <Text key={bullet} style={styles.planBullet}>
                 {bullet}
               </Text>
@@ -630,10 +539,10 @@ export function SubscriptionScreen() {
 
             <Pressable
               style={styles.enterpriseButton}
-              onPress={() => void handlePlanPress(enterprisePlan)}
+              onPress={() => void handlePlanPress(enterpriseSubscriptionPlan)}
             >
               <Text style={styles.enterpriseButtonText}>
-                {enterprisePlan.buttonLabel}
+                {enterpriseSubscriptionPlan.buttonLabel}
               </Text>
             </Pressable>
           </LinearGradient>
