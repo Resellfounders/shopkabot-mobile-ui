@@ -27,9 +27,9 @@ import {
   initializeWebTracking,
   trackBeginCheckout,
   trackContact,
+  trackCustomerWon,
   trackCustomEvent,
   trackPageView,
-  trackPurchase,
 } from "../services/marketingTracking";
 import {
   createRazorpaySubscription,
@@ -637,7 +637,7 @@ export function PublicGetStartedScreen() {
       }
 
       trackedPurchasesRef.current.add(trackingKey);
-      trackPurchase({
+      trackCustomerWon({
         transaction_id: record.providerPaymentId || trackingKey,
         subscription_id: trackingKey,
         content_name: record.planName,
@@ -886,7 +886,7 @@ export function PublicGetStartedScreen() {
           razorpaySubscriptionId: checkoutResponse.razorpay_subscription_id,
           razorpaySignature: checkoutResponse.razorpay_signature,
         });
-        trackPurchase({
+        trackCustomerWon({
           transaction_id: checkoutResponse.razorpay_payment_id,
           subscription_id: checkoutResponse.razorpay_subscription_id,
           content_name: plan.name,
